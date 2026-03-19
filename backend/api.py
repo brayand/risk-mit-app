@@ -22,6 +22,9 @@ from etl.risk_engine import RiskEngine, FACTOR_KEYS, CORR, RISK_WEIGHTS
 from orchestrator import run_pipeline
 from config import DB_PATH
 
+# ── Ensure output directory exists (important for Docker persistent disk mount) 
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = FastAPI(title="Meridian Risk Lab API", version="1.0.0")
 
