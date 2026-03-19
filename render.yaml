@@ -1,0 +1,29 @@
+# Meridian Risk Lab — Render deployment configuration
+# Docs: https://render.com/docs/render-yaml-spec
+
+services:
+  - type: web
+    name: meridian-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter          # $7/mo — always-on, required for persistent disk
+    healthCheckPath: /api/health
+
+    disk:
+      name: meridian-db
+      mountPath: /app/data
+      sizeGB: 1            # $0.25/mo — stores meridian.db across restarts
+
+    envVars:
+      - key: DB_PATH
+        value: /app/data/meridian.db
+
+      # ── Add your free API keys in the Render dashboard ──
+      # Do NOT commit real keys to Git — set them as secrets in Render UI
+      - key: EIA_API_KEY
+        sync: false        # Render will prompt you to enter the value
+      - key: NREL_API_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
