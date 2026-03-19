@@ -2,14 +2,15 @@
 Meridian Risk Lab — Pipeline Configuration
 All public API endpoints, rate limits, and shared constants.
 """
+import os
 
 # ── API Endpoints (all public / no key required) ──────────────────────────────
 
 EIA_BASE          = "https://api.eia.gov/v2"
-EIA_API_KEY       = _os.getenv("EIA_API_KEY", "DEMO_KEY")     # Free: eia.gov/opendata
+EIA_API_KEY       = os.getenv("EIA_API_KEY", "DEMO_KEY")     # Free: eia.gov/opendata
 
 NREL_BASE         = "https://developer.nrel.gov/api"
-NREL_API_KEY      = _os.getenv("NREL_API_KEY", "DEMO_KEY")    # Free: developer.nrel.gov
+NREL_API_KEY      = os.getenv("NREL_API_KEY", "DEMO_KEY")    # Free: developer.nrel.gov
 
 NRC_ADAMS_BASE    = "https://adams.nrc.gov/wba/services/search/results"
 NRC_EVENTS_BASE   = "https://www.nrc.gov/reading-rm/doc-collections/event-status"
@@ -20,11 +21,11 @@ FERC_RSS_BASE     = "https://www.ferc.gov/rss"
 USGS_EARTHQUAKE   = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 USGS_GEOTHERMAL   = "https://mrdata.usgs.gov/services/wfs/hot-springs"
 
-DOE_OSTI          = "https://www.osti.gov/api/v1/records"
+DOEosTI          = "https://www.osti.gov/api/v1/records"
 DOE_ARPA_E        = "https://arpa-e.energy.gov/api/projects"  # HTML scrape fallback
 
 FRED_BASE         = "https://api.stlouisfed.org/fred/series/observations"
-FRED_API_KEY      = _os.getenv("FRED_API_KEY", "")            # Free: fred.stlouisfed.org
+FRED_API_KEY      = os.getenv("FRED_API_KEY", "")            # Free: fred.stlouisfed.org
 
 # ── FRED Series IDs relevant to clean energy risk ─────────────────────────────
 FRED_SERIES = {
@@ -74,8 +75,8 @@ STATE_SEISMIC_ZONE = {
 }
 
 # ── Pipeline settings ─────────────────────────────────────────────────────────
-import os as _os
-DB_PATH           = _os.getenv("DB_PATH", _os.path.join(_os.path.dirname(__file__), "output", "meridian.db"))
+
+DB_PATH         = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "output", "meridian.db"))
 LOG_PATH          = "/home/claude/pipeline/output/pipeline.log"
 CACHE_TTL_DAYS    = 30       # refresh data if older than this
 REQUEST_TIMEOUT   = 20       # seconds per HTTP request
