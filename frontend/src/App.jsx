@@ -56,6 +56,11 @@ const Spinner = () => <div style={{display:"flex",alignItems:"center",justifyCon
 const Tag = ({children,color="#4a5580"}) => <span style={{fontSize:9,padding:"2px 7px",borderRadius:10,background:`${color}18`,color,border:`1px solid ${color}30`,fontFamily:T.mono,letterSpacing:1}}>{children}</span>;
 const Th = ({children}) => <th style={{padding:"8px 10px",color:T.textDim,fontSize:10,textTransform:"uppercase",letterSpacing:1,textAlign:"left",fontWeight:500,fontFamily:T.mono,borderBottom:`1px solid ${T.border}`}}>{children}</th>;
 const Td = ({children,mono,color}) => <td style={{padding:"11px 10px",color:color||T.textMid,fontFamily:mono?T.mono:undefined,borderBottom:`1px solid ${T.bg}`,fontSize:12}}>{children}</td>;
+const PageDescription = ({children}) => (
+  <Card style={{marginBottom:16,padding:"14px 18px",background:"#091325",borderColor:T.borderHi}}>
+    <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.7}}>{children}</div>
+  </Card>
+);
 
 function KPI({label,value,sub,color,loading}) {
   return (
@@ -130,6 +135,9 @@ function Dashboard() {
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0 6px",letterSpacing:-1}}>Risk Dashboard</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Storage · Nuclear SMR · Geothermal — NAIC RBC — Live Pipeline Data</p>
       </div>
+      <PageDescription>
+        This dashboard summarizes portfolio-level exposure and loss outcomes using live project records plus synced external data. It combines project counts, capital at risk, expected annual loss, and NAIC capital requirements so you can see where risk is concentrated before drilling into model details.
+      </PageDescription>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
         <KPI label="Projects"        value={ps.length}                         sub="In portfolio"       loading={loading}/>
         <KPI label="Total Capacity"  value={`${fmtN(totalMW)} MW`}            sub="All technologies"   loading={loading}/>
@@ -240,6 +248,9 @@ function AddProject({onProjectAdded}) {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Data Entry</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Add Project</h1></div>
+      <PageDescription>
+        Use this page to register a project in the underwriting portfolio. Each field feeds downstream scoring and capital calculations, so entries here become part of the risk engine, review queue, and export outputs after the next analysis refresh.
+      </PageDescription>
       <Card style={{maxWidth:680}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px"}}>
           <Field label="Project Name"      field="name"/>
@@ -269,6 +280,9 @@ function RiskModel() {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Methodology</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Risk Model</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>8-factor scoring · Monte Carlo · t-Copula · NAIC RBC · Live DB adjustments</p></div>
+      <PageDescription>
+        This view explains how each project score is produced and translated into loss distributions. Factor scores drive the composite risk rating, Monte Carlo outputs estimate downside scenarios, and NAIC RBC components convert modeled risk into required regulatory capital.
+      </PageDescription>
       {loading ? <Spinner/> : <>
         <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           {projects.map((p,i)=>(
@@ -330,6 +344,9 @@ function CorrelationMatrix() {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Dependency Structure</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Correlation Matrix</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Pearson correlations · t-Copula (ν=4) · used in Monte Carlo simulation</p></div>
+      <PageDescription>
+        The matrix shows how project risk factors move together instead of independently. These dependency assumptions are applied in simulation to produce portfolio-level VaR and TVaR that reflect diversification and concentration effects.
+      </PageDescription>
       {loading ? <Spinner/> : (
         <Card style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono}}>
@@ -368,6 +385,9 @@ function NaicRBC() {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Regulatory Capital</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>NAIC RBC Analysis</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>National Association of Insurance Commissioners · Risk-Based Capital</p></div>
+      <PageDescription>
+        This page translates modeled loss and exposure into NAIC-style capital requirements. You can review C-1 through C-4 components, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital.
+      </PageDescription>
       {loading ? <Spinner/> : <>
         <div style={{display:"flex",gap:10,marginBottom:16}}>
           <KPI label="Portfolio EAL"    value={fmtM(data?.portfolio_eal)}      color="#f0a040"/>
@@ -415,6 +435,9 @@ function DataFeeds() {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Live Pipeline Data</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Data Feeds</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>EIA · NREL · NRC · USGS · FRED — all public sources, updated monthly</p></div>
+      <PageDescription>
+        Data feeds are the evidence layer behind scoring assumptions. This page shows the latest synchronized source tables so users can validate cost, seismic, nuclear, and macro inputs that inform project risk ratings and capital outputs.
+      </PageDescription>
       <div style={{display:"flex",gap:0,marginBottom:20,background:T.bg,borderRadius:8,border:`1px solid ${T.border}`,width:"fit-content"}}>
         {tabs.map(([id,label,count])=>(
           <button key={id} onClick={()=>setTab(id)} style={{padding:"9px 20px",border:"none",cursor:"pointer",fontSize:11,fontFamily:T.mono,background:tab===id?T.surface:"transparent",color:tab===id?"#4ecdc4":T.textDim,borderRadius:8}}>
@@ -489,6 +512,9 @@ function HumanReview() {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Quality Gate</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Human Review</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Review all flagged items before outputs are unlocked · Live risk data</p></div>
+      <PageDescription>
+        Human Review is a governance checkpoint that prevents automatic release of outputs when high-severity flags appear. Analysts approve or dismiss each item with notes, creating an auditable trail before reports can be generated.
+      </PageDescription>
       {pending>0 && <div style={{background:"#140808",border:"1px solid #2a1010",borderRadius:8,padding:"14px 18px",marginBottom:20,display:"flex",gap:12,alignItems:"center"}}><span style={{color:"#e85d5d",fontSize:18}}>⚠</span><span style={{color:"#c8a0a0",fontSize:13,fontFamily:T.mono}}>{pending} item{pending>1?"s":""} pending — outputs locked</span></div>}
       {loading ? <Spinner/> : (data?.items||[]).map(item=>{
         const done=actions[item.id];
@@ -542,6 +568,9 @@ function ExportOutputs() {
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Report Generation</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Export Outputs</h1></div>
+      <PageDescription>
+        Export Outputs packages approved analytics into report formats for underwriting, actuarial, and compliance teams. Generation stays locked until review is complete, enforcing a controlled handoff from model results to decision-ready deliverables.
+      </PageDescription>
       {isLocked && <div style={{background:"#140808",border:"1px solid #2a1010",borderRadius:8,padding:"14px 18px",marginBottom:20,display:"flex",gap:12,alignItems:"center"}}><span style={{color:"#e85d5d"}}>🔒</span><span style={{color:"#c8a0a0",fontSize:13,fontFamily:T.mono}}>{locked.pending} review item{locked.pending>1?"s":""} pending. Complete Human Review to unlock.</span></div>}
       <Card style={{marginBottom:16}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
