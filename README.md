@@ -29,13 +29,10 @@ meridian-risk-lab/
 │   └── output/
 │       └── meridian.db       # SQLite database (pre-seeded with NREL + NRC data)
 │
-└── frontend/                 # React + Vite UI
-    ├── index.html
+└── frontend/                 # React UI (standalone in index.html) + Vite dev server
+    ├── index.html            # Full single-file React app (9 screens, in-browser Babel)
     ├── package.json
-    ├── vite.config.js        # Dev proxy: /api → localhost:8000
-    └── src/
-        ├── main.jsx
-        └── App.jsx           # Full single-file React app (9 screens)
+    └── vite.config.js        # Dev proxy: /api → localhost:8000
 ```
 
 ---
@@ -64,7 +61,7 @@ npm run dev
 # → http://localhost:3000
 ```
 
-The Vite dev proxy forwards `/api/*` to the backend automatically.
+The UI lives in `index.html` (React via CDN + in-browser Babel). The Vite dev proxy forwards `/api/*` to the backend automatically.
 
 ### 3. Run the data pipeline
 
