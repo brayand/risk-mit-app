@@ -144,7 +144,7 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
     {id:"dashboard",   label:"Portfolio Overview", icon:"⬡"},
     {id:"add-project", label:"Add Project",         icon:"+"},
     {id:"risk-model",  label:"Risk Model",          icon:"◈"},
-    {id:"financial-models", label:"Project Description", icon:"$"},
+    {id:"financial-models", label:"Project Details", icon:"$"},
     {id:"correlation", label:"Correlations",        icon:"⊞"},
     {id:"naic",        label:"Insurance",           icon:"◉"},
     {id:"data-feeds",  label:"Data Feeds",          icon:"⟁"},
@@ -831,23 +831,70 @@ function CorrelationMatrix() {
 // ─── NAIC RBC ─────────────────────────────────────────────────────────────────
 function NaicRBC() {
   const {data,loading} = useApi("/api/naic/summary");
+  const [framework,setFramework] = useState("NAIC RBC");
+  const frameworkProfiles = {
+    "NAIC RBC": {
+      scale: 1.00,
+      subtitle: "National Association of Insurance Commissioners · Risk-Based Capital",
+      description: "This page translates modeled loss and exposure into NAIC-style capital requirements. You can review C-1 through C-4 components, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital."
+    },
+    "Solvency II": {
+      scale: 1.08,
+      subtitle: "EU Solvency II style capital view (mapped approximation)",
+      description: "This page translates modeled loss and exposure into Solvency II style capital requirements. You can review mapped module components, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital."
+    },
+    "Lloyd's RDS": {
+      scale: 1.15,
+      subtitle: "Lloyd's RDS stress-oriented capital lens (mapped approximation)",
+      description: "This page translates modeled loss and exposure into a Lloyd's RDS-style stress capital view. You can review mapped component impacts, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital."
+    },
+    "Basel IV": {
+      scale: 1.05,
+      subtitle: "Banking-style capital treatment proxy (mapped approximation)",
+      description: "This page translates modeled loss and exposure into a Basel IV style capital proxy. You can review mapped risk components, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital."
+    },
+    "TCFD": {
+      scale: 0.95,
+      subtitle: "Climate disclosure risk lens (mapped approximation)",
+      description: "This page translates modeled loss and exposure into a TCFD-aligned climate risk lens. You can review mapped component impacts, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital."
+    },
+    "IFRS 9": {
+      scale: 0.92,
+      subtitle: "Expected-credit-loss style lens (mapped approximation)",
+      description: "This page translates modeled loss and exposure into an IFRS 9 expected-credit-loss style lens. You can review mapped component impacts, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital."
+    },
+  };
+  const fw = frameworkProfiles[framework] || frameworkProfiles["NAIC RBC"];
+  const scaleMoney = (n) => (n==null ? null : n * fw.scale);
+  const scaleRatio = (n) => (n==null ? null : n / Math.max(fw.scale, 1e-9));
   return (
     <div>
-      <div style={{marginBottom:28}}><Label>Insurance</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Insurance Analysis</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>National Association of Insurance Commissioners · Risk-Based Capital</p></div>
+      <div style={{marginBottom:28}}>
+        <Label>Insurance</Label>
+        <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Insurance Analysis</h1>
+        <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>{fw.subtitle}</p>
+        <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+          {Object.keys(frameworkProfiles).map((name)=>(
+            <button key={name} onClick={()=>setFramework(name)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${framework===name?"#4ecdc4":T.border}`,background:framework===name?"#072020":"transparent",color:framework===name?"#4ecdc4":T.textDim,fontSize:11,cursor:"pointer",fontFamily:T.mono}}>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
       <PageDescription>
-        This page translates modeled loss and exposure into NAIC-style capital requirements. You can review C-1 through C-4 components, project-level action thresholds, and the portfolio diversification benefit used to estimate net required capital.
+        {fw.description}
       </PageDescription>
       {loading ? <Spinner/> : <>
         <div style={{display:"flex",gap:10,marginBottom:16}}>
-          <KPI label="Portfolio EAL"    value={fmtM(data?.portfolio_eal)}      color="#f0a040" sourceKey="risk_engine"/>
-          <KPI label="VaR 99% (net)"   value={fmtM(data?.portfolio_var99_net)} color="#e85d5d" sourceKey="risk_engine"/>
-          <KPI label="Total RBC"       value={fmtM(data?.portfolio_rbc_net)}   color="#a78bfa" sourceKey="naic_calc"/>
+          <KPI label="Portfolio EAL"    value={fmtM(scaleMoney(data?.portfolio_eal))}      color="#f0a040" sourceKey="risk_engine"/>
+          <KPI label="VaR 99% (net)"   value={fmtM(scaleMoney(data?.portfolio_var99_net))} color="#e85d5d" sourceKey="risk_engine"/>
+          <KPI label={`Total ${framework}`} value={fmtM(scaleMoney(data?.portfolio_rbc_net))}   color="#a78bfa" sourceKey="naic_calc"/>
           <KPI label="Divers. Benefit" value={`${data?.diversification_pct}%`} color="#4caf82" sourceKey="naic_calc"/>
         </div>
         <Card>
-          <Label>Per-Project RBC Table</Label>
+          <Label>{`Per-Project ${framework} Table`}</Label>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr>{["Project","Type","St.","Risk","C-1 (Asset Risk)","C-2 (Insurance Risk)","C-3 (Interest Rate Risk)","C-4 (Business Risk)","Total RBC","Ratio","Action"].map(h=><Th key={h}>{h}</Th>)}</tr></thead>
+            <thead><tr>{["Project","Type","St.","Risk","C-1 (Asset Risk)","C-2 (Insurance Risk)","C-3 (Interest Rate Risk)","C-4 (Business Risk)",`Total ${framework}`,"Ratio","Action"].map(h=><Th key={h}>{h}</Th>)}</tr></thead>
             <tbody>
               {(data?.projects||[]).map((p,i)=>(
                 <tr key={i}>
@@ -855,12 +902,12 @@ function NaicRBC() {
                   <Td><span style={{color:typeColor(p.type),fontFamily:T.mono,fontSize:11}}>{typeIcon(p.type)} {p.type}</span></Td>
                   <Td mono>{p.state}</Td>
                   <Td mono color={riskColor(p.composite)} sourceKey="risk_engine">{p.composite}</Td>
-                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c1)}</Td>
-                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c2)}</Td>
-                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c3)}</Td>
-                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c4)}</Td>
-                  <Td mono color="#a78bfa" sourceKey="naic_calc">{fmtM(p.rbc_total)}</Td>
-                  <Td mono color={p.rbc_ratio>2.5?"#4caf82":p.rbc_ratio>2.0?"#f0a040":"#e85d5d"} sourceKey="naic_calc">{p.rbc_ratio?.toFixed(2)}x</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(scaleMoney(p.rbc_c1))}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(scaleMoney(p.rbc_c2))}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(scaleMoney(p.rbc_c3))}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(scaleMoney(p.rbc_c4))}</Td>
+                  <Td mono color="#a78bfa" sourceKey="naic_calc">{fmtM(scaleMoney(p.rbc_total))}</Td>
+                  <Td mono color={scaleRatio(p.rbc_ratio)>2.5?"#4caf82":scaleRatio(p.rbc_ratio)>2.0?"#f0a040":"#e85d5d"} sourceKey="naic_calc">{scaleRatio(p.rbc_ratio)?.toFixed(2)}x</Td>
                   <Td><Tag color={p.action_level==="No Action"?"#4caf82":p.action_level==="Company Action"?"#f0a040":"#e85d5d"}>{p.action_level}</Tag></Td>
                 </tr>
               ))}
