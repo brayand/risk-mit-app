@@ -218,7 +218,7 @@ function Dashboard() {
             <div key={type} style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                 <span style={{fontSize:12,color:typeColor(type),fontFamily:T.mono}}>{typeIcon(type)} {type}</span>
-                <span style={{fontSize:11,color:T.textDim,fontFamily:T.mono}}>{fmtM(d.capex)}</span>
+                <span style={{fontSize:11,color:T.textDim,fontFamily:T.mono}}><SourceHint sourceKey="portfolio_calc">{fmtM(d.capex)}</SourceHint></span>
               </div>
               <div style={{height:4,background:T.border,borderRadius:2}}>
                 <div style={{height:4,width:`${(d.capex/totalCapex)*100}%`,background:typeColor(type),borderRadius:2,opacity:0.85}}/>
@@ -236,14 +236,14 @@ function Dashboard() {
                   <div style={{fontSize:10,color:T.textDim,marginTop:2}}>{p.type} · {p.state}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:13,color:"#a78bfa",fontFamily:T.mono,fontWeight:600}}>{fmtM(p.rbc_total)}</div>
-                  <div style={{fontSize:10,color:riskColor(p.composite),fontFamily:T.mono}}>Score: {p.composite}</div>
+                  <div style={{fontSize:13,color:"#a78bfa",fontFamily:T.mono,fontWeight:600}}><SourceHint sourceKey="naic_calc">{fmtM(p.rbc_total)}</SourceHint></div>
+                  <div style={{fontSize:10,color:riskColor(p.composite),fontFamily:T.mono}}><SourceHint sourceKey="risk_engine">Score: {p.composite}</SourceHint></div>
                 </div>
               </div>
             ))}
             <div style={{display:"flex",justifyContent:"space-between",paddingTop:8}}>
               <span style={{fontSize:12,color:T.text,fontWeight:600}}>Total RBC Required</span>
-              <span style={{fontSize:16,color:"#a78bfa",fontFamily:T.mono,fontWeight:700}}>{fmtM(naic.portfolio_rbc_net)}</span>
+              <span style={{fontSize:16,color:"#a78bfa",fontFamily:T.mono,fontWeight:700}}><SourceHint sourceKey="naic_calc">{fmtM(naic.portfolio_rbc_net)}</SourceHint></span>
             </div>
           </>}
         </Card>
@@ -371,12 +371,12 @@ function RiskModel() {
                   <div style={{flex:1,height:5,background:T.border,borderRadius:2}}>
                     <div style={{height:5,width:`${v}%`,background:riskColor(v),borderRadius:2,opacity:0.85,transition:"width 0.4s"}}/>
                   </div>
-                  <div style={{width:32,textAlign:"right",fontSize:12,color:riskColor(v),fontFamily:T.mono,fontWeight:600}}>{v?.toFixed(0)}</div>
+                  <div style={{width:32,textAlign:"right",fontSize:12,color:riskColor(v),fontFamily:T.mono,fontWeight:600}}><SourceHint sourceKey="risk_engine">{v?.toFixed(0)}</SourceHint></div>
                 </div>
               ))}
               <div style={{borderTop:`1px solid ${T.border}`,paddingTop:12,marginTop:4,display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontSize:12,color:T.text,fontWeight:600,fontFamily:T.mono}}>COMPOSITE</span>
-                <span style={{fontSize:18,fontWeight:700,color:riskColor(pr.scores?.composite),fontFamily:T.mono}}>{pr.scores?.composite?.toFixed(1)}</span>
+                <span style={{fontSize:18,fontWeight:700,color:riskColor(pr.scores?.composite),fontFamily:T.mono}}><SourceHint sourceKey="risk_engine">{pr.scores?.composite?.toFixed(1)}</SourceHint></span>
               </div>
             </Card>
             <Card>
@@ -384,19 +384,19 @@ function RiskModel() {
               {[{label:"Expected Annual Loss",value:pr.losses?.eal,color:"#4caf82"},{label:"VaR 95%",value:pr.losses?.var_95,color:"#f0a040"},{label:"VaR 99%",value:pr.losses?.var_99,color:"#e85d5d"},{label:"TVaR 99% (CVaR)",value:pr.losses?.tvar_99,color:"#ff6b6b"},{label:"PML (1-in-200yr)",value:pr.losses?.pml,color:"#ff4040"}].map(r=>(
                 <div key={r.label} style={{display:"flex",justifyContent:"space-between",marginBottom:11,paddingBottom:11,borderBottom:`1px solid ${T.bg}`}}>
                   <span style={{fontSize:12,color:T.textMid}}>{r.label}</span>
-                  <span style={{fontFamily:T.mono,fontSize:13,color:r.color,fontWeight:600}}>{fmtM(r.value)}</span>
+                  <span style={{fontFamily:T.mono,fontSize:13,color:r.color,fontWeight:600}}><SourceHint sourceKey="risk_engine">{fmtM(r.value)}</SourceHint></span>
                 </div>
               ))}
               <div style={{marginTop:16}}><Label>NAIC RBC</Label>
                 {[{label:"C-1 Asset Risk",value:pr.naic_rbc?.c1,color:"#4ecdc4"},{label:"C-2 Insurance Risk",value:pr.naic_rbc?.c2,color:"#a78bfa"},{label:"C-3 Interest Rate",value:pr.naic_rbc?.c3,color:"#f59e0b"},{label:"C-4 Business Risk",value:pr.naic_rbc?.c4,color:"#4caf82"}].map(r=>(
                   <div key={r.label} style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                     <span style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>{r.label}</span>
-                    <span style={{fontFamily:T.mono,fontSize:12,color:r.color}}>{fmtM(r.value)}</span>
+                    <span style={{fontFamily:T.mono,fontSize:12,color:r.color}}><SourceHint sourceKey="naic_calc">{fmtM(r.value)}</SourceHint></span>
                   </div>
                 ))}
                 <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10,marginTop:8,display:"flex",justifyContent:"space-between"}}>
                   <span style={{fontSize:12,color:T.text,fontWeight:600}}>Total RBC</span>
-                  <span style={{fontFamily:T.mono,fontSize:15,color:"#a78bfa",fontWeight:700}}>{fmtM(pr.naic_rbc?.total)}</span>
+                  <span style={{fontFamily:T.mono,fontSize:15,color:"#a78bfa",fontWeight:700}}><SourceHint sourceKey="naic_calc">{fmtM(pr.naic_rbc?.total)}</SourceHint></span>
                 </div>
               </div>
             </Card>
@@ -605,10 +605,10 @@ function NaicRBC() {
       </PageDescription>
       {loading ? <Spinner/> : <>
         <div style={{display:"flex",gap:10,marginBottom:16}}>
-          <KPI label="Portfolio EAL"    value={fmtM(data?.portfolio_eal)}      color="#f0a040"/>
-          <KPI label="VaR 99% (net)"   value={fmtM(data?.portfolio_var99_net)} color="#e85d5d"/>
-          <KPI label="Total RBC"       value={fmtM(data?.portfolio_rbc_net)}   color="#a78bfa"/>
-          <KPI label="Divers. Benefit" value={`${data?.diversification_pct}%`} color="#4caf82"/>
+          <KPI label="Portfolio EAL"    value={fmtM(data?.portfolio_eal)}      color="#f0a040" sourceKey="risk_engine"/>
+          <KPI label="VaR 99% (net)"   value={fmtM(data?.portfolio_var99_net)} color="#e85d5d" sourceKey="risk_engine"/>
+          <KPI label="Total RBC"       value={fmtM(data?.portfolio_rbc_net)}   color="#a78bfa" sourceKey="naic_calc"/>
+          <KPI label="Divers. Benefit" value={`${data?.diversification_pct}%`} color="#4caf82" sourceKey="naic_calc"/>
         </div>
         <Card>
           <Label>Per-Project RBC Table</Label>
@@ -620,13 +620,13 @@ function NaicRBC() {
                   <Td><span style={{color:T.text,fontWeight:500}}>{p.name.split(" ").slice(0,3).join(" ")}</span></Td>
                   <Td><span style={{color:typeColor(p.type),fontFamily:T.mono,fontSize:11}}>{typeIcon(p.type)} {p.type}</span></Td>
                   <Td mono>{p.state}</Td>
-                  <Td mono color={riskColor(p.composite)}>{p.composite}</Td>
-                  <Td mono>{fmtM(p.rbc_c1)}</Td>
-                  <Td mono>{fmtM(p.rbc_c2)}</Td>
-                  <Td mono>{fmtM(p.rbc_c3)}</Td>
-                  <Td mono>{fmtM(p.rbc_c4)}</Td>
-                  <Td mono color="#a78bfa">{fmtM(p.rbc_total)}</Td>
-                  <Td mono color={p.rbc_ratio>2.5?"#4caf82":p.rbc_ratio>2.0?"#f0a040":"#e85d5d"}>{p.rbc_ratio?.toFixed(2)}x</Td>
+                  <Td mono color={riskColor(p.composite)} sourceKey="risk_engine">{p.composite}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c1)}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c2)}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c3)}</Td>
+                  <Td mono sourceKey="naic_calc">{fmtM(p.rbc_c4)}</Td>
+                  <Td mono color="#a78bfa" sourceKey="naic_calc">{fmtM(p.rbc_total)}</Td>
+                  <Td mono color={p.rbc_ratio>2.5?"#4caf82":p.rbc_ratio>2.0?"#f0a040":"#e85d5d"} sourceKey="naic_calc">{p.rbc_ratio?.toFixed(2)}x</Td>
                   <Td><Tag color={p.action_level==="No Action"?"#4caf82":p.action_level==="Company Action"?"#f0a040":"#e85d5d"}>{p.action_level}</Tag></Td>
                 </tr>
               ))}
