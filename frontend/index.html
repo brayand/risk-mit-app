@@ -595,8 +595,12 @@ function FinancialModels() {
 function CorrelationMatrix() {
   const {data,loading} = useApi("/api/risk/correlation");
   const {data: inter, loading: interLoading} = useApi("/api/risk/correlation/between-projects");
+  const [selParent,setSelParent] = useState(0);
 
   const corrColor = (v) => { const r=Math.round(255*v),b=Math.round(255*(1-v)); return `rgba(${r},70,${b},${0.25+v*0.75})`; };
+  const parentEntries = Object.entries(data?.grouped_matrices || {});
+  const activeParent = parentEntries[selParent]?.[0];
+  const activeGroup = parentEntries[selParent]?.[1];
 
   return (
     <div>
@@ -636,39 +640,44 @@ function CorrelationMatrix() {
       {!loading && data?.grouped_matrices && (
         <Card style={{marginTop:14}}>
           <Label>Parent Category Subcomponent Matrices</Label>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(320px,1fr))",gap:12,marginTop:10}}>
-            {Object.entries(data.grouped_matrices).map(([parent, g])=>(
-              <div key={parent} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:10,overflowX:"auto"}}>
-                <div style={{fontSize:11,color:T.text,fontFamily:T.mono,marginBottom:8,textTransform:"capitalize"}}>
-                  {parent.replace("_"," ")}
-                </div>
-                <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono}}>
-                  <thead><tr>
-                    <th style={{width:110}}/>
-                    {(g.labels||[]).map((l,i)=>(
-                      <th key={i} style={{padding:"4px 6px",color:T.textDim,fontWeight:500,textAlign:"center"}}>
-                        {l}
-                      </th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {(g.matrix||[]).map((row,i)=>(
-                      <tr key={i}>
-                        <td style={{padding:"4px 8px 4px 0",color:T.textMid,fontSize:10,whiteSpace:"nowrap"}}>{g.labels?.[i]}</td>
-                        {row.map((v,j)=>(
-                          <td key={j} style={{padding:2}}>
-                            <div style={{width:58,height:26,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.55?"#fff":T.textMid,fontSize:10}}>
-                              <SourceHint sourceKey="correlation_calc">{Number(v).toFixed(2)}</SourceHint>
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div style={{display:"flex",gap:8,marginTop:10,marginBottom:12,flexWrap:"wrap"}}>
+            {parentEntries.map(([parent],i)=>(
+              <button key={parent} onClick={()=>setSelParent(i)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${selParent===i?"#4ecdc4":T.border}`,background:selParent===i?"#072020":"transparent",color:selParent===i?"#4ecdc4":T.textDim,fontSize:11,cursor:"pointer",fontFamily:T.mono,textTransform:"capitalize"}}>
+                {parent.replace("_"," ")}
+              </button>
             ))}
           </div>
+          {activeGroup && (
+            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:10,overflowX:"auto"}}>
+              <div style={{fontSize:11,color:T.text,fontFamily:T.mono,marginBottom:8,textTransform:"capitalize"}}>
+                {activeParent?.replace("_"," ")}
+              </div>
+              <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono}}>
+                <thead><tr>
+                  <th style={{width:130}}/>
+                  {(activeGroup.labels||[]).map((l,i)=>(
+                    <th key={i} style={{padding:"4px 6px",color:T.textDim,fontWeight:500,textAlign:"center"}}>
+                      {l}
+                    </th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {(activeGroup.matrix||[]).map((row,i)=>(
+                    <tr key={i}>
+                      <td style={{padding:"4px 8px 4px 0",color:T.textMid,fontSize:10,whiteSpace:"nowrap"}}>{activeGroup.labels?.[i]}</td>
+                      {row.map((v,j)=>(
+                        <td key={j} style={{padding:2}}>
+                          <div style={{width:62,height:26,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.55?"#fff":T.textMid,fontSize:10}}>
+                            <SourceHint sourceKey="correlation_calc">{Number(v).toFixed(2)}</SourceHint>
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
       <Card style={{marginTop:14,overflowX:"auto"}}>
