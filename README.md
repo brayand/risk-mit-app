@@ -29,8 +29,8 @@ meridian-risk-lab/
 │   └── output/
 │       └── meridian.db       # SQLite database (pre-seeded with NREL + NRC data)
 │
-└── frontend/                 # React UI (standalone in index.html) + Vite dev server
-    ├── index.html            # Full single-file React app (9 screens, in-browser Babel)
+└── frontend/                 # React UI + Vite dev server (single entry file)
+    ├── index.html            # Single frontend app source
     ├── package.json
     └── vite.config.js        # Dev proxy: /api → localhost:8000
 ```
