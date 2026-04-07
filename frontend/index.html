@@ -565,6 +565,60 @@ function FinancialModels() {
     label:k.replace("_"," ").replace(/\b\w/g, c=>c.toUpperCase()),
     value:selectedRisk?.scores?.[k]
   }));
+  const capex = selectedProject?.capex || 0;
+  const debtRatio = assumptions.debt_ratio ?? 0.6;
+  const equityRatio = Math.max(0, 1 - debtRatio);
+  const debtPrincipal = metrics.debt_principal_usd ?? capex * debtRatio;
+  const equityCapital = metrics.equity_usd ?? capex * equityRatio;
+  const annualRevenue = metrics.annual_revenue_usd || 0;
+  const annualEbitda = metrics.annual_ebitda_usd || 0;
+  const annualDebtService = metrics.annual_debt_service_usd || 0;
+  const annualEal = selectedRisk?.losses?.eal || 0;
+  const annualVar99 = selectedRisk?.losses?.var_99 || 0;
+  const insurancePremium = annualEal * 0.35;
+  const insuredLimit = annualVar99 * 0.6;
+  const taxEquityCapital = capex * 0.12;
+  const taxBenefit = annualEbitda * 0.08;
+  const carbonPricePerMwh = 22;
+  const carbonCreditRevenue = (metrics.annual_generation_mwh || 0) * carbonPricePerMwh;
+  const carbonBuyerCapital = carbonCreditRevenue * 0.75;
+  const stakeholderRows = [
+    {
+      stakeholder: "Equity Investors",
+      capitalIn: equityCapital,
+      riskExposure: Math.max(0, annualVar99 - debtPrincipal * 0.05),
+      upside: Math.max(0, annualEbitda - annualDebtService),
+      mechanism: "Residual cash flow and terminal value after debt service."
+    },
+    {
+      stakeholder: "Loan Providers",
+      capitalIn: debtPrincipal,
+      riskExposure: debtPrincipal * 0.25,
+      upside: annualDebtService - (metrics.annual_principal_usd || 0),
+      mechanism: "Contractual interest and principal payments."
+    },
+    {
+      stakeholder: "Insurance Providers",
+      capitalIn: insuredLimit,
+      riskExposure: insuredLimit,
+      upside: insurancePremium,
+      mechanism: "Premium income in exchange for catastrophe/operational coverage."
+    },
+    {
+      stakeholder: "Tax Equity Holders",
+      capitalIn: taxEquityCapital,
+      riskExposure: taxEquityCapital * 0.7,
+      upside: taxBenefit,
+      mechanism: "Monetized tax credits and depreciation allocations."
+    },
+    {
+      stakeholder: "Carbon Credit Buyers",
+      capitalIn: carbonBuyerCapital,
+      riskExposure: carbonBuyerCapital * 0.35,
+      upside: carbonCreditRevenue,
+      mechanism: "Contracted purchase of environmental attributes/credits."
+    }
+  ];
 
   return (
     <div>
@@ -644,6 +698,29 @@ function FinancialModels() {
                 <tr><Td mono color={T.text}>DSCR</Td>{rows.map((r)=> <Td key={`dsc${r.year}`} mono color={r.dscr >= 1.3 ? "#4caf82" : r.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model">{withVarNum(r.dscr, r.variance?.dscr, 2)}</Td>)}</tr>
                 <tr><Td mono color={T.text}>Cumulative CF</Td>{rows.map((r)=> <Td key={`ccf${r.year}`} mono color="#a78bfa" sourceKey="financial_model">{withVar(r.cumulative_cashflow_usd, r.variance?.cumulative_cashflow_usd)}</Td>)}</tr>
                 <tr><Td mono color={T.text}>Ending Debt</Td>{rows.map((r)=> <Td key={`end${r.year}`} mono sourceKey="financial_model">{withVar(r.ending_debt_usd, r.variance?.ending_debt_usd)}</Td>)}</tr>
+              </tbody>
+            </table>
+          </Card>
+
+          <Card style={{marginBottom:14}}>
+            <Label>Stakeholder Capital & Risk Allocation</Label>
+            <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:10}}>
+              Estimated annualized economics showing how each stakeholder contributes capital, assumes risk, and participates in project upside.
+            </div>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr>{["Stakeholder","Capital Added","Risk Exposure","Upside Received","How Return Is Realized"].map(h=><Th key={h}>{h}</Th>)}</tr>
+              </thead>
+              <tbody>
+                {stakeholderRows.map((r)=>(
+                  <tr key={r.stakeholder}>
+                    <Td mono>{r.stakeholder}</Td>
+                    <Td mono color="#4ecdc4" sourceKey="financial_model">{fmtM(r.capitalIn)}</Td>
+                    <Td mono color="#e85d5d" sourceKey="risk_engine">{fmtM(r.riskExposure)}</Td>
+                    <Td mono color="#4caf82" sourceKey="financial_model">{fmtM(r.upside)}</Td>
+                    <Td>{r.mechanism}</Td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </Card>
