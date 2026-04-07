@@ -204,6 +204,22 @@ def _build_subcomponent_matrix() -> dict:
             row.append(round(max(0.05, min(0.99, base)), 3))
         matrix.append(row)
     weights = [round(RISK_WEIGHTS[parent_by_label[l]] / 2.0, 4) for l in labels]
+    grouped = {}
+    for parent in FACTOR_KEYS:
+        idxs = [i for i, l in enumerate(labels) if parent_by_label[l] == parent]
+        if not idxs:
+            continue
+        g_labels = [labels[i] for i in idxs]
+        g_keys = [g.lower().replace(" ", "_") for g in g_labels]
+        g_matrix = [[matrix[i][j] for j in idxs] for i in idxs]
+        grouped[parent] = {
+            "parent_factor": parent,
+            "labels": g_labels,
+            "keys": g_keys,
+            "matrix": g_matrix,
+            "descriptions": [desc_by_label[l] for l in g_labels],
+        }
+
     return {
         "labels": labels,
         "keys": [l.lower().replace(" ", "_") for l in labels],
@@ -211,6 +227,7 @@ def _build_subcomponent_matrix() -> dict:
         "weights": weights,
         "parents": [parent_by_label[l] for l in labels],
         "descriptions": [desc_by_label[l] for l in labels],
+        "grouped_matrices": grouped,
     }
 
 
@@ -600,6 +617,7 @@ def get_correlation():
         "weights": sub["weights"],
         "parent_factors": sub["parents"],
         "descriptions": sub["descriptions"],
+        "grouped_matrices": sub["grouped_matrices"],
     }
 
 
