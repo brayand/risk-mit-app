@@ -543,7 +543,9 @@ function RiskModel() {
 function FinancialModels() {
   const {data,loading} = useApi("/api/financial-models");
   const {data:portfolioRisk,loading:loadingRisk} = useApi("/api/risk/portfolio");
+  const {data:projectsData} = useApi("/api/projects");
   const [sel,setSel] = useState(0);
+  const [section,setSection] = useState("overview");
   const models = data?.models || [];
   const selected = models[sel];
   const fm = selected?.financial_model || {};
@@ -552,6 +554,20 @@ function FinancialModels() {
   const rows = fm.yearly_projection || [];
   const riskRows = portfolioRisk?.projects || [];
   const selectedRisk = riskRows[sel];
+  const projectRows = projectsData?.projects || [];
+  const selectedProject = projectRows.find((p)=>p.id===selected?.project_id) || null;
+  const subcomponents = selectedProject?.correlation_subcomponents || {};
+  const engineeringSubs = Object.entries(subcomponents).filter(([,v])=>
+    ["technology","construction","operational"].includes(v.parent_factor)
+  ).slice(0,12);
+  const riskParents = ["technology","regulatory","construction","counterparty","physical","financial","operational","workforce"];
+  const riskParentMeasures = riskParents.map((k)=>({
+    key:k,
+    label:k.replace("_"," ").replace(/\b\w/g, c=>c.toUpperCase()),
+    value:selectedRisk?.scores?.[k]
+  }));
+
+  useEffect(() => { setSection("overview"); }, [sel]);
 
   return (
     <div>
@@ -572,93 +588,144 @@ function FinancialModels() {
           ))}
         </div>
         {selected && <>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
-            <KPI label="Project" value={selected.project_name} sub={`${selected.project_type} · ${selected.state}`}/>
-            <KPI label="Annual Revenue (Y1)" value={fmtM(metrics.annual_revenue_usd)} color="#4ecdc4" sourceKey="financial_model"/>
-            <KPI label="Annual EBITDA (Y1)" value={fmtM(metrics.annual_ebitda_usd)} color="#4caf82" sourceKey="financial_model"/>
-            <KPI label="DSCR (Y1)" value={metrics.dscr?.toFixed ? metrics.dscr.toFixed(2) : "—"} color={metrics.dscr >= 1.3 ? "#4caf82" : metrics.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model"/>
-            <KPI label="IRR (10Y)" value={metrics.irr_pct!=null ? `${metrics.irr_pct.toFixed(2)}%` : "—"} color="#a78bfa" sourceKey="financial_model"/>
-            <KPI label="Payback" value={metrics.payback_years ? `${metrics.payback_years.toFixed(1)} yrs` : "—"} color="#a78bfa" sourceKey="financial_model"/>
+          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            {["overview","financial","engineering","risk"].map((s)=>(
+              <button key={s} onClick={()=>setSection(s)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${section===s?"#4ecdc4":T.border}`,background:section===s?"#072020":"transparent",color:section===s?"#4ecdc4":T.textDim,fontSize:11,cursor:"pointer",fontFamily:T.mono,textTransform:"capitalize"}}>
+                {s}
+              </button>
+            ))}
           </div>
-          <Card style={{marginBottom:14}}>
-            <Label>Risk Measures</Label>
-            {loadingRisk ? <Spinner/> : !selectedRisk ? (
-              <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>Risk measures unavailable for selected project.</div>
-            ) : (
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(150px,1fr))",gap:10}}>
-                <KPI label="Composite Risk" value={selectedRisk.scores?.composite?.toFixed ? selectedRisk.scores.composite.toFixed(1) : "—"} color={riskColor(selectedRisk.scores?.composite)} sourceKey="risk_engine"/>
-                <KPI label="Expected Annual Loss" value={fmtM(selectedRisk.losses?.eal)} color="#4caf82" sourceKey="risk_engine"/>
-                <KPI label="VaR 95%" value={fmtM(selectedRisk.losses?.var_95)} color="#f0a040" sourceKey="risk_engine"/>
-                <KPI label="VaR 99%" value={fmtM(selectedRisk.losses?.var_99)} color="#e85d5d" sourceKey="risk_engine"/>
-                <KPI label="TVaR 99%" value={fmtM(selectedRisk.losses?.tvar_99)} color="#ff6b6b" sourceKey="risk_engine"/>
+
+          {section==="overview" && (
+            <>
+              <Card style={{marginBottom:14}}>
+                <Label>Overview</Label>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(150px,1fr))",gap:10,fontSize:12}}>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Project: <span style={{color:T.text}}>{selected.project_name}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Type: <span style={{color:T.text}}>{selected.project_type}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>State: <span style={{color:T.text}}>{selected.state}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>ID: <span style={{color:T.text}}>{selected.project_id}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Capacity: <span style={{color:T.text}}>{selectedProject?.mw ?? "—"} MW</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>CapEx: <span style={{color:T.text}}>{fmtM(selectedProject?.capex)}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Offtake: <span style={{color:T.text}}>{selectedProject?.offtake || "—"}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Status: <span style={{color:T.text}}>{selectedProject?.status || "—"}</span></div>
+                </div>
+              </Card>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+                <KPI label="Annual Revenue (Y1)" value={fmtM(metrics.annual_revenue_usd)} color="#4ecdc4" sourceKey="financial_model"/>
+                <KPI label="IRR (10Y)" value={metrics.irr_pct!=null ? `${metrics.irr_pct.toFixed(2)}%` : "—"} color="#a78bfa" sourceKey="financial_model"/>
+                <KPI label="Composite Risk" value={selectedRisk?.scores?.composite?.toFixed ? selectedRisk.scores.composite.toFixed(1) : "—"} color={riskColor(selectedRisk?.scores?.composite)} sourceKey="risk_engine"/>
+                <KPI label="VaR 99%" value={fmtM(selectedRisk?.losses?.var_99)} color="#e85d5d" sourceKey="risk_engine"/>
               </div>
-            )}
-          </Card>
-          <Card style={{marginBottom:14}}>
-            <Label>Model Assumptions</Label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(160px,1fr))",gap:10,fontSize:12}}>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Capacity Factor: <span style={{color:T.text}}>{assumptions.capacity_factor!=null ? `${(assumptions.capacity_factor*100).toFixed(1)}%` : "—"}</span></div>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Price: <span style={{color:T.text}}>{assumptions.price_usd_mwh!=null ? `$${fmtN(assumptions.price_usd_mwh,2)}/MWh` : "—"}</span></div>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Opex Ratio: <span style={{color:T.text}}>{assumptions.opex_ratio!=null ? `${(assumptions.opex_ratio*100).toFixed(2)}%` : "—"}</span></div>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Debt Ratio: <span style={{color:T.text}}>{assumptions.debt_ratio!=null ? `${(assumptions.debt_ratio*100).toFixed(0)}%` : "—"}</span></div>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Debt Rate: <span style={{color:T.text}}>{assumptions.debt_rate!=null ? `${(assumptions.debt_rate*100).toFixed(2)}%` : "—"}</span></div>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Debt Tenor: <span style={{color:T.text}}>{assumptions.debt_tenor_years || "—"} years</span></div>
-              <div style={{color:T.textMid,fontFamily:T.mono}}>Equity IRR (10Y): <span style={{color:T.text}}>{metrics.irr_pct!=null ? `${metrics.irr_pct.toFixed(2)}%` : "—"}</span></div>
-            </div>
-          </Card>
-          <Card>
-            <Label>10-Year Yearly Financial Model</Label>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead>
-                <tr>
-                  <Th>Metric</Th>
-                  {rows.map((r)=> <Th key={`y${r.year}`}>{`Year ${r.year}`}</Th>)}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <Td mono color={T.text}>Revenue</Td>
-                  {rows.map((r)=> <Td key={`rev${r.year}`} mono color="#4ecdc4" sourceKey="financial_model">{withVar(r.revenue_usd, r.variance?.revenue_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Opex</Td>
-                  {rows.map((r)=> <Td key={`opx${r.year}`} mono sourceKey="financial_model">{withVar(r.opex_usd, r.variance?.opex_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>EBITDA</Td>
-                  {rows.map((r)=> <Td key={`ebt${r.year}`} mono color="#4caf82" sourceKey="financial_model">{withVar(r.ebitda_usd, r.variance?.ebitda_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Interest</Td>
-                  {rows.map((r)=> <Td key={`int${r.year}`} mono sourceKey="financial_model">{withVar(r.interest_usd, r.variance?.interest_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Principal</Td>
-                  {rows.map((r)=> <Td key={`pri${r.year}`} mono sourceKey="financial_model">{withVar(r.principal_usd, r.variance?.principal_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Debt Service</Td>
-                  {rows.map((r)=> <Td key={`deb${r.year}`} mono sourceKey="financial_model">{withVar(r.debt_service_usd, r.variance?.debt_service_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Net Cash Flow</Td>
-                  {rows.map((r)=> <Td key={`ncf${r.year}`} mono color={r.net_cashflow_usd >= 0 ? "#4caf82" : "#e85d5d"} sourceKey="financial_model">{withVar(r.net_cashflow_usd, r.variance?.net_cashflow_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>DSCR</Td>
-                  {rows.map((r)=> <Td key={`dsc${r.year}`} mono color={r.dscr >= 1.3 ? "#4caf82" : r.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model">{withVarNum(r.dscr, r.variance?.dscr, 2)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Cumulative CF</Td>
-                  {rows.map((r)=> <Td key={`ccf${r.year}`} mono color="#a78bfa" sourceKey="financial_model">{withVar(r.cumulative_cashflow_usd, r.variance?.cumulative_cashflow_usd)}</Td>)}
-                </tr>
-                <tr>
-                  <Td mono color={T.text}>Ending Debt</Td>
-                  {rows.map((r)=> <Td key={`end${r.year}`} mono sourceKey="financial_model">{withVar(r.ending_debt_usd, r.variance?.ending_debt_usd)}</Td>)}
-                </tr>
-              </tbody>
-            </table>
-          </Card>
+            </>
+          )}
+
+          {section==="financial" && (
+            <>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+                <KPI label="Annual Revenue (Y1)" value={fmtM(metrics.annual_revenue_usd)} color="#4ecdc4" sourceKey="financial_model"/>
+                <KPI label="Annual EBITDA (Y1)" value={fmtM(metrics.annual_ebitda_usd)} color="#4caf82" sourceKey="financial_model"/>
+                <KPI label="DSCR (Y1)" value={metrics.dscr?.toFixed ? metrics.dscr.toFixed(2) : "—"} color={metrics.dscr >= 1.3 ? "#4caf82" : metrics.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model"/>
+                <KPI label="IRR (10Y)" value={metrics.irr_pct!=null ? `${metrics.irr_pct.toFixed(2)}%` : "—"} color="#a78bfa" sourceKey="financial_model"/>
+                <KPI label="Payback" value={metrics.payback_years ? `${metrics.payback_years.toFixed(1)} yrs` : "—"} color="#a78bfa" sourceKey="financial_model"/>
+              </div>
+              <Card style={{marginBottom:14}}>
+                <Label>Model Assumptions</Label>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(160px,1fr))",gap:10,fontSize:12}}>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Capacity Factor: <span style={{color:T.text}}>{assumptions.capacity_factor!=null ? `${(assumptions.capacity_factor*100).toFixed(1)}%` : "—"}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Price: <span style={{color:T.text}}>{assumptions.price_usd_mwh!=null ? `$${fmtN(assumptions.price_usd_mwh,2)}/MWh` : "—"}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Opex Ratio: <span style={{color:T.text}}>{assumptions.opex_ratio!=null ? `${(assumptions.opex_ratio*100).toFixed(2)}%` : "—"}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Debt Ratio: <span style={{color:T.text}}>{assumptions.debt_ratio!=null ? `${(assumptions.debt_ratio*100).toFixed(0)}%` : "—"}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Debt Rate: <span style={{color:T.text}}>{assumptions.debt_rate!=null ? `${(assumptions.debt_rate*100).toFixed(2)}%` : "—"}</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Debt Tenor: <span style={{color:T.text}}>{assumptions.debt_tenor_years || "—"} years</span></div>
+                  <div style={{color:T.textMid,fontFamily:T.mono}}>Equity IRR (10Y): <span style={{color:T.text}}>{metrics.irr_pct!=null ? `${metrics.irr_pct.toFixed(2)}%` : "—"}</span></div>
+                </div>
+              </Card>
+              <Card>
+                <Label>10-Year Yearly Financial Model</Label>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr>
+                      <Th>Metric</Th>
+                      {rows.map((r)=> <Th key={`y${r.year}`}>{`Year ${r.year}`}</Th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><Td mono color={T.text}>Revenue</Td>{rows.map((r)=> <Td key={`rev${r.year}`} mono color="#4ecdc4" sourceKey="financial_model">{withVar(r.revenue_usd, r.variance?.revenue_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Opex</Td>{rows.map((r)=> <Td key={`opx${r.year}`} mono sourceKey="financial_model">{withVar(r.opex_usd, r.variance?.opex_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>EBITDA</Td>{rows.map((r)=> <Td key={`ebt${r.year}`} mono color="#4caf82" sourceKey="financial_model">{withVar(r.ebitda_usd, r.variance?.ebitda_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Interest</Td>{rows.map((r)=> <Td key={`int${r.year}`} mono sourceKey="financial_model">{withVar(r.interest_usd, r.variance?.interest_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Principal</Td>{rows.map((r)=> <Td key={`pri${r.year}`} mono sourceKey="financial_model">{withVar(r.principal_usd, r.variance?.principal_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Debt Service</Td>{rows.map((r)=> <Td key={`deb${r.year}`} mono sourceKey="financial_model">{withVar(r.debt_service_usd, r.variance?.debt_service_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Net Cash Flow</Td>{rows.map((r)=> <Td key={`ncf${r.year}`} mono color={r.net_cashflow_usd >= 0 ? "#4caf82" : "#e85d5d"} sourceKey="financial_model">{withVar(r.net_cashflow_usd, r.variance?.net_cashflow_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>DSCR</Td>{rows.map((r)=> <Td key={`dsc${r.year}`} mono color={r.dscr >= 1.3 ? "#4caf82" : r.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model">{withVarNum(r.dscr, r.variance?.dscr, 2)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Cumulative CF</Td>{rows.map((r)=> <Td key={`ccf${r.year}`} mono color="#a78bfa" sourceKey="financial_model">{withVar(r.cumulative_cashflow_usd, r.variance?.cumulative_cashflow_usd)}</Td>)}</tr>
+                    <tr><Td mono color={T.text}>Ending Debt</Td>{rows.map((r)=> <Td key={`end${r.year}`} mono sourceKey="financial_model">{withVar(r.ending_debt_usd, r.variance?.ending_debt_usd)}</Td>)}</tr>
+                  </tbody>
+                </table>
+              </Card>
+            </>
+          )}
+
+          {section==="engineering" && (
+            <>
+              <Card style={{marginBottom:14}}>
+                <Label>Engineering Overview</Label>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(140px,1fr))",gap:10}}>
+                  <KPI label="Capacity (MW)" value={selectedProject?.mw ?? "—"} sourceKey="portfolio_calc"/>
+                  <KPI label="Annual Gen (Y1)" value={metrics.annual_generation_mwh!=null ? `${fmtN(metrics.annual_generation_mwh,0)} MWh` : "—"} sourceKey="financial_model"/>
+                  <KPI label="Capacity Factor" value={assumptions.capacity_factor!=null ? `${(assumptions.capacity_factor*100).toFixed(1)}%` : "—"} sourceKey="financial_model"/>
+                  <KPI label="Asset Type" value={selected.project_type || "—"} sourceKey="portfolio_calc"/>
+                </div>
+              </Card>
+              <Card>
+                <Label>Engineering Subcomponents</Label>
+                {engineeringSubs.length===0 ? <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>No engineering subcomponents available.</div> : engineeringSubs.map(([name,obj])=>(
+                  <div key={name} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                    <div style={{width:220,fontSize:11,color:T.textMid,fontFamily:T.mono}}>{name}</div>
+                    <div style={{flex:1,height:5,background:T.border,borderRadius:2}}>
+                      <div style={{height:5,width:`${obj.score}%`,background:riskColor(obj.score),borderRadius:2}}/>
+                    </div>
+                    <div style={{width:40,textAlign:"right",fontSize:12,color:riskColor(obj.score),fontFamily:T.mono}}>{obj.score.toFixed(1)}</div>
+                  </div>
+                ))}
+              </Card>
+            </>
+          )}
+
+          {section==="risk" && (
+            <>
+              <Card style={{marginBottom:14}}>
+                <Label>Risk Measures</Label>
+                {loadingRisk ? <Spinner/> : !selectedRisk ? (
+                  <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>Risk measures unavailable for selected project.</div>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(150px,1fr))",gap:10}}>
+                    <KPI label="Composite Risk" value={selectedRisk.scores?.composite?.toFixed ? selectedRisk.scores.composite.toFixed(1) : "—"} color={riskColor(selectedRisk.scores?.composite)} sourceKey="risk_engine"/>
+                    <KPI label="Expected Annual Loss" value={fmtM(selectedRisk.losses?.eal)} color="#4caf82" sourceKey="risk_engine"/>
+                    <KPI label="VaR 95%" value={fmtM(selectedRisk.losses?.var_95)} color="#f0a040" sourceKey="risk_engine"/>
+                    <KPI label="VaR 99%" value={fmtM(selectedRisk.losses?.var_99)} color="#e85d5d" sourceKey="risk_engine"/>
+                    <KPI label="TVaR 99%" value={fmtM(selectedRisk.losses?.tvar_99)} color="#ff6b6b" sourceKey="risk_engine"/>
+                  </div>
+                )}
+              </Card>
+              <Card>
+                <Label>Parent Category Measures</Label>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead><tr><Th>Parent Category</Th><Th>Score</Th><Th>Interpretation</Th></tr></thead>
+                  <tbody>
+                    {riskParentMeasures.map((r)=>(
+                      <tr key={r.key}>
+                        <Td mono>{r.label}</Td>
+                        <Td mono color={riskColor(r.value)} sourceKey="risk_engine">{r.value!=null ? r.value.toFixed(1) : "—"}</Td>
+                        <Td>{r.value==null ? "Unavailable" : r.value>=75 ? "Elevated" : r.value>=55 ? "Moderate" : "Lower"}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            </>
+          )}
         </>}
       </>}
     </div>
