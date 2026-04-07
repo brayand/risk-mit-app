@@ -447,6 +447,58 @@ def get_correlation():
     }
 
 
+@app.get("/api/risk/correlation/project/{project_id}")
+def get_project_correlation(project_id: str):
+    p = next((x for x in _projects if x["id"] == project_id), None)
+    if not p:
+        raise HTTPException(404, "Project not found")
+
+    engine = get_engine()
+    analysis = engine.analyze_project(p)
+    scores = analysis.get("scores", {})
+
+    type_factor_map = {
+        "Geothermal": "physical_risk",
+        "Nuclear SMR": "regulatory_risk",
+        "Battery Storage": "operational_risk",
+    }
+    anchor_factor = type_factor_map.get(p["type"], "physical_risk")
+    anchor_idx = FACTOR_KEYS.index(anchor_factor)
+
+    avg_score = sum(float(scores.get(k, 50.0)) for k in FACTOR_KEYS) / len(FACTOR_KEYS)
+    # Scale correlation concentration by project-specific score level.
+    # Higher scores increase inter-factor dependency slightly.
+    adj = max(-0.05, min(0.05, (avg_score - 50.0) / 1000.0))
+
+    matrix = []
+    for i, row in enumerate(CORR):
+        out_row = []
+        for j, base_val in enumerate(row):
+            if i == j:
+                out_row.append(1.0)
+                continue
+            v = float(base_val) + adj
+            if i == anchor_idx or j == anchor_idx:
+                v += 0.04
+            v = max(0.05, min(0.99, v))
+            out_row.append(round(v, 3))
+        matrix.append(out_row)
+
+    labels = [k.replace("_", " ").title() for k in FACTOR_KEYS]
+    return {
+        "project_id": p["id"],
+        "project_name": p["name"],
+        "project_type": p["type"],
+        "project_state": p["state"],
+        "anchor_factor": anchor_factor,
+        "score_adjustment": round(adj, 4),
+        "labels": labels,
+        "keys": FACTOR_KEYS,
+        "matrix": matrix,
+        "weights": [RISK_WEIGHTS[k] for k in FACTOR_KEYS],
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # DATA FEEDS (pipeline DB read-outs)
 # ══════════════════════════════════════════════════════════════════════════════
