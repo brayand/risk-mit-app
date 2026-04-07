@@ -113,8 +113,39 @@ def _offtake_price_usd_mwh(offtake: str) -> float:
     return by_offtake.get(offtake, 75.0)
 
 
+def _variance_assumptions(project_type: str) -> dict:
+    by_type = {
+        "Geothermal": {
+            "revenue_pct": 0.08,
+            "opex_pct": 0.06,
+            "ebitda_pct": 0.10,
+            "debt_service_pct": 0.00,
+            "net_cashflow_pct": 0.12,
+            "dscr_pct": 0.08,
+        },
+        "Nuclear SMR": {
+            "revenue_pct": 0.10,
+            "opex_pct": 0.08,
+            "ebitda_pct": 0.14,
+            "debt_service_pct": 0.00,
+            "net_cashflow_pct": 0.16,
+            "dscr_pct": 0.10,
+        },
+        "Battery Storage": {
+            "revenue_pct": 0.12,
+            "opex_pct": 0.07,
+            "ebitda_pct": 0.16,
+            "debt_service_pct": 0.00,
+            "net_cashflow_pct": 0.18,
+            "dscr_pct": 0.12,
+        },
+    }
+    return by_type.get(project_type, by_type["Geothermal"])
+
+
 def build_financial_model(project: dict) -> dict:
     assumptions = _project_financial_assumptions(project["type"])
+    variance = _variance_assumptions(project["type"])
     price_usd_mwh = _offtake_price_usd_mwh(project.get("offtake", "Merchant"))
 
     annual_generation_mwh = float(project["mw"]) * 8760 * assumptions["capacity_factor"]
@@ -184,6 +215,18 @@ def build_financial_model(project: dict) -> dict:
             "cumulative_cashflow_usd": round(cumulative_cashflow, 2),
             "ending_debt_usd": round(remaining_debt, 2),
             "dscr": round(dscr_y, 3) if dscr_y is not None else None,
+            "variance": {
+                "revenue_usd": round(abs(revenue_y) * variance["revenue_pct"], 2),
+                "opex_usd": round(abs(opex_y) * variance["opex_pct"], 2),
+                "ebitda_usd": round(abs(ebitda_y) * variance["ebitda_pct"], 2),
+                "interest_usd": round(abs(interest_y) * variance["debt_service_pct"], 2),
+                "principal_usd": round(abs(principal_y) * variance["debt_service_pct"], 2),
+                "debt_service_usd": round(abs(debt_service_y) * variance["debt_service_pct"], 2),
+                "net_cashflow_usd": round(abs(net_cashflow_y) * variance["net_cashflow_pct"], 2),
+                "cumulative_cashflow_usd": round(abs(cumulative_cashflow) * variance["net_cashflow_pct"], 2),
+                "ending_debt_usd": round(abs(remaining_debt) * variance["debt_service_pct"], 2),
+                "dscr": round((abs(dscr_y) * variance["dscr_pct"]), 3) if dscr_y is not None else None,
+            },
         })
 
     return {
@@ -194,6 +237,7 @@ def build_financial_model(project: dict) -> dict:
             "debt_ratio": assumptions["debt_ratio"],
             "debt_rate": assumptions["debt_rate"],
             "debt_tenor_years": assumptions["debt_tenor_years"],
+            "variance": variance,
         },
         "metrics": {
             "annual_generation_mwh": round(annual_generation_mwh, 2),
