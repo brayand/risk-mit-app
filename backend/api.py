@@ -143,6 +143,43 @@ def _variance_assumptions(project_type: str) -> dict:
     return by_type.get(project_type, by_type["Geothermal"])
 
 
+def _compute_irr(cashflows: list, low: float = -0.95, high: float = 1.5, steps: int = 120) -> Optional[float]:
+    """
+    Compute IRR from periodic cash flows with a bounded bisection solve.
+    Returns decimal IRR (e.g., 0.1234 = 12.34%) or None if no real root in bounds.
+    """
+    if not cashflows or len(cashflows) < 2:
+        return None
+    if not (any(cf > 0 for cf in cashflows) and any(cf < 0 for cf in cashflows)):
+        return None
+
+    def npv(rate: float) -> float:
+        return sum(cf / ((1.0 + rate) ** t) for t, cf in enumerate(cashflows))
+
+    f_low = npv(low)
+    f_high = npv(high)
+    if f_low == 0:
+        return low
+    if f_high == 0:
+        return high
+    if f_low * f_high > 0:
+        return None
+
+    lo, hi = low, high
+    for _ in range(steps):
+        mid = (lo + hi) / 2.0
+        f_mid = npv(mid)
+        if abs(f_mid) < 1e-8:
+            return mid
+        if f_low * f_mid < 0:
+            hi = mid
+            f_high = f_mid
+        else:
+            lo = mid
+            f_low = f_mid
+    return (lo + hi) / 2.0
+
+
 def build_financial_model(project: dict) -> dict:
     assumptions = _project_financial_assumptions(project["type"])
     variance = _variance_assumptions(project["type"])
@@ -229,6 +266,10 @@ def build_financial_model(project: dict) -> dict:
             },
         })
 
+    # Equity IRR: initial equity investment at t0, followed by 10 years of net cash flows.
+    equity_cashflows = [-equity_usd] + [float(y["net_cashflow_usd"]) for y in yearly_projection]
+    irr = _compute_irr(equity_cashflows)
+
     return {
         "assumptions": {
             "capacity_factor": assumptions["capacity_factor"],
@@ -250,6 +291,8 @@ def build_financial_model(project: dict) -> dict:
             "net_operating_cashflow_usd": round(net_operating_cashflow_usd, 2),
             "dscr": round(dscr, 3) if dscr is not None else None,
             "payback_years": round(payback_years, 2) if payback_years is not None else None,
+            "irr_decimal": round(irr, 6) if irr is not None else None,
+            "irr_pct": round(irr * 100, 2) if irr is not None else None,
         },
         "yearly_projection": yearly_projection,
     }
