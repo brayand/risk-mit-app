@@ -113,23 +113,93 @@ def _offtake_price_usd_mwh(offtake: str) -> float:
     return by_offtake.get(offtake, 75.0)
 
 
+SUBCOMPONENT_TEMPLATES = {
+    "technology": [
+        ("Tech Maturity", "Technology readiness and proven deployment.", +7),
+        ("Design Complexity", "Engineering design complexity and uncertainty.", +4),
+        ("Supply Chain Depth", "Critical component supply chain resilience.", +2),
+        ("Vendor Concentration", "Dependency on single-source vendors.", 0),
+        ("Integration Risk", "System integration coupling risk.", -2),
+        ("Performance Variability", "Output and performance variability risk.", -4),
+        ("Degradation Profile", "Aging/degradation and lifecycle uncertainty.", -6),
+        ("Innovation Risk", "Novel feature risk beyond reference plants.", -8),
+    ],
+    "regulatory": [
+        ("Licensing Complexity", "Permit/NRC review complexity and uncertainty.", +7),
+        ("Policy Stability", "State/federal policy and market rule volatility.", +5),
+        ("Compliance Burden", "Ongoing compliance and reporting burden.", +3),
+        ("Siting Constraints", "Land-use/environmental siting constraint risk.", +1),
+        ("Permit Lead Time", "Schedule sensitivity to permit lead times.", -1),
+        ("Community Opposition", "Public/legal challenge exposure.", -3),
+        ("Interconnection Rules", "Grid interconnection regulatory uncertainty.", -5),
+        ("Cross-Agency Coordination", "Multi-agency approval coordination risk.", -7),
+    ],
+    "construction": [
+        ("Schedule Pressure", "Probability of timeline slippage.", +8),
+        ("Cost Overrun Risk", "Likelihood of capex overrun versus plan.", +6),
+        ("Labor Productivity", "Field productivity and rework risk.", +4),
+        ("EPC Counterparty", "EPC contractor execution reliability.", +2),
+        ("Site Conditions", "Subsurface/logistics site uncertainty.", 0),
+        ("Procurement Timing", "Long-lead equipment timing risk.", -2),
+        ("Commissioning Risk", "Startup/commissioning defect risk.", -4),
+        ("Change-Order Exposure", "Scope change / variation-order risk.", -6),
+    ],
+    "counterparty": [
+        ("Offtake Credit", "Counterparty credit and default resilience.", +7),
+        ("Contract Structure", "Contract terms and merchant exposure.", +5),
+        ("Concentration Risk", "Revenue concentration in few counterparties.", +3),
+        ("Tenor Mismatch", "Contract tenor mismatch versus asset life.", +1),
+        ("Indexation Terms", "Tariff/indexation term uncertainty.", -1),
+        ("Collateral Strength", "Collateral and guarantee quality risk.", -3),
+        ("Termination Clauses", "Early termination clause risk.", -5),
+        ("Dispute Risk", "Commercial dispute / enforcement risk.", -7),
+    ],
+    "physical": [
+        ("Seismic Exposure", "Geologic and seismic hazard sensitivity.", +8),
+        ("Climate Exposure", "Weather and long-term climate hazard pressure.", +6),
+        ("Flood/Wildfire Exposure", "Acute natural hazard exposure.", +4),
+        ("Water Availability", "Water resource and cooling availability risk.", +2),
+        ("Thermal Stress", "Heat/cold operating stress risk.", 0),
+        ("Geotechnical Stability", "Ground stability and subsidence risk.", -2),
+        ("Environmental Incidents", "Environmental incident probability.", -4),
+        ("Emergency Access", "Emergency response accessibility risk.", -6),
+    ],
+    "financial": [
+        ("Rate Sensitivity", "Interest-rate and refinancing sensitivity.", +7),
+        ("Refinance Risk", "Future refinancing / covenant stress risk.", +5),
+        ("Liquidity Buffer", "Working-capital and liquidity stress risk.", +3),
+        ("Leverage Pressure", "Debt-service leverage pressure.", +1),
+        ("FX/Commodity Linkage", "Indirect commodity/fx linkage risk.", -1),
+        ("Inflation Pass-through", "Cost inflation pass-through risk.", -3),
+        ("Hedge Effectiveness", "Hedge mismatch and basis risk.", -5),
+        ("Capital Access", "Access-to-capital cyclicality risk.", -7),
+    ],
+    "operational": [
+        ("Asset Reliability", "Operational reliability and forced outage risk.", +7),
+        ("Dispatch Flexibility", "Operational flexibility under market stress.", +5),
+        ("Maintenance Quality", "Maintenance planning and execution risk.", +3),
+        ("Control Systems", "Control/automation performance risk.", +1),
+        ("Spare Parts Lead Time", "Critical spare parts availability risk.", -1),
+        ("Cyber Resilience", "Cyber operations and downtime risk.", -3),
+        ("Grid Curtailment", "Curtailment and dispatch constraint risk.", -5),
+        ("Outage Recovery", "Recovery-time and restart reliability risk.", -7),
+    ],
+    "workforce": [
+        ("Labor Availability", "Skilled labor availability and retention.", +7),
+        ("Safety Culture", "Training/safety culture and incident prevention.", +5),
+        ("Training Pipeline", "Talent development pipeline sufficiency.", +3),
+        ("Union/Labor Relations", "Labor relations and disruption risk.", +1),
+        ("Turnover Risk", "Attrition-driven capability erosion risk.", -1),
+        ("Contractor Dependence", "Dependence on third-party contractors.", -3),
+        ("Shift Coverage", "Shift coverage and fatigue management risk.", -5),
+        ("Specialist Scarcity", "Specialist role scarcity risk.", -7),
+    ],
+}
+
 SUBCOMPONENT_SPECS = [
-    ("Tech Maturity", "technology", "Technology readiness and proven deployment."),
-    ("Tech Supply Chain", "technology", "Critical component and EPC supply-chain risk."),
-    ("Licensing Complexity", "regulatory", "Permit/NRC review complexity and uncertainty."),
-    ("Policy Stability", "regulatory", "State/federal policy and market rule volatility."),
-    ("Schedule Pressure", "construction", "Probability of timeline slippage."),
-    ("Cost Overrun Risk", "construction", "Likelihood of capex overrun versus plan."),
-    ("Offtake Credit", "counterparty", "Counterparty credit/contract resilience."),
-    ("Contract Structure", "counterparty", "Contract terms and merchant exposure."),
-    ("Seismic Exposure", "physical", "Geologic and seismic hazard sensitivity."),
-    ("Climate Exposure", "physical", "Weather and long-term climate hazard pressure."),
-    ("Rate Sensitivity", "financial", "Interest-rate and refinancing sensitivity."),
-    ("Refinance Risk", "financial", "Future refinancing / covenant stress risk."),
-    ("Asset Reliability", "operational", "Operational reliability and forced outage risk."),
-    ("Dispatch Flexibility", "operational", "Operational flexibility under market stress."),
-    ("Labor Availability", "workforce", "Skilled labor availability and retention."),
-    ("Safety Culture", "workforce", "Training/safety culture and incident prevention."),
+    (label, parent, desc, offset)
+    for parent in FACTOR_KEYS
+    for (label, desc, offset) in SUBCOMPONENT_TEMPLATES[parent]
 ]
 
 
@@ -163,22 +233,8 @@ def build_project_subcomponents(project: dict) -> dict:
         "workforce": workforce_seed * status_mult,
     }
 
-    split_offsets = {
-        "technology": (+6, -4),
-        "regulatory": (+5, -3),
-        "construction": (+7, -2),
-        "counterparty": (+4, -4),
-        "physical": (+8, -5),
-        "financial": (+6, -3),
-        "operational": (+5, -4),
-        "workforce": (+6, -2),
-    }
-    parent_idx = {}
     subs = {}
-    for label, parent, desc in SUBCOMPONENT_SPECS:
-        parent_idx[parent] = parent_idx.get(parent, 0)
-        off = split_offsets[parent][parent_idx[parent] % 2]
-        parent_idx[parent] += 1
+    for label, parent, desc, off in SUBCOMPONENT_SPECS:
         val = max(0.0, min(99.0, parent_scores[parent] + off))
         subs[label] = {"score": round(val, 2), "parent_factor": parent, "description": desc}
     return subs
@@ -200,10 +256,13 @@ def _build_subcomponent_matrix() -> dict:
             pj = parent_by_label[lj]
             base = CORR[factor_index[pi]][factor_index[pj]]
             if pi == pj:
-                base = min(0.95, base + 0.28)
+                base = min(0.95, base + 0.22)
             row.append(round(max(0.05, min(0.99, base)), 3))
         matrix.append(row)
-    weights = [round(RISK_WEIGHTS[parent_by_label[l]] / 2.0, 4) for l in labels]
+    parent_counts = {}
+    for p in FACTOR_KEYS:
+        parent_counts[p] = len([1 for _, parent, _, _ in SUBCOMPONENT_SPECS if parent == p]) or 1
+    weights = [round(RISK_WEIGHTS[parent_by_label[l]] / parent_counts[parent_by_label[l]], 4) for l in labels]
     grouped = {}
     for parent in FACTOR_KEYS:
         idxs = [i for i, l in enumerate(labels) if parent_by_label[l] == parent]
@@ -625,7 +684,7 @@ def get_correlation():
 def get_between_projects_correlation():
     """
     N×N matrix of implied correlations between portfolio projects.
-    Built from aligned 8-factor risk score profiles (centered cosine / correlation),
+    Built from aligned subcomponent score profiles (centered cosine / correlation),
     with bonuses for same technology type and same state (shared exposure channels).
     """
     if not _projects:
@@ -681,7 +740,7 @@ def get_between_projects_correlation():
         "matrix": matrix,
         "count": n,
         "method": (
-            "Subcomponent-profile similarity: centered correlation of 16 project "
+            f"Subcomponent-profile similarity: centered correlation of {len(SUBCOMPONENT_SPECS)} project "
             "subcomponent scores, plus bonuses for shared technology type and state."
         ),
     }
