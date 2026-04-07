@@ -16,10 +16,10 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback } = React;
 
-    // ── PRODUCTION: replace with your Render backend URL ──────────────────────
-    // Example: "https://meridian-backend.onrender.com"
-    // Leave as empty string to auto-detect (same origin, for reverse-proxy setups)
-    const API_BASE = "https://risk-mit-app.onrender.com";
+    // Use local Vite proxy in local dev; use hosted backend elsewhere.
+    const API_BASE = (["localhost", "127.0.0.1"].includes(window.location.hostname))
+      ? ""
+      : "https://risk-mit-app.onrender.com";
     const API = API_BASE;
 
 
