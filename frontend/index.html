@@ -185,6 +185,7 @@ function Dashboard() {
   const {data:portfolio,loading} = useApi("/api/risk/portfolio");
   const {data:naic}              = useApi("/api/naic/summary");
   const {data:projects}          = useApi("/api/projects");
+  const {data:interCorr}         = useApi("/api/risk/correlation/between-projects");
   const ps = projects?.projects||[];
   const totalCapex = ps.reduce((s,p)=>s+p.capex,0);
   const totalMW    = ps.reduce((s,p)=>s+p.mw,0);
@@ -210,10 +211,46 @@ function Dashboard() {
     if(pt.ret > bestRet){ bestRet = pt.ret; return true; }
     return false;
   });
-  const minRiskUsd = sortedPts.length ? Math.min(...sortedPts.map(p=>p.riskUsd)) : 0;
-  const maxRiskUsd = sortedPts.length ? Math.max(...sortedPts.map(p=>p.riskUsd)) : 100;
-  const minRet  = sortedPts.length ? Math.min(...sortedPts.map(p=>p.ret)) : 0;
-  const maxRet  = sortedPts.length ? Math.max(...sortedPts.map(p=>p.ret)) : 10;
+  // Simulated portfolio make-ups (long-only, fully invested) using project-to-project correlation.
+  const portfolios = [];
+  if (sortedPts.length >= 2) {
+    const n = sortedPts.length;
+    const corr = (interCorr?.matrix && interCorr.matrix.length===n) ? interCorr.matrix : null;
+    const idToIdx = Object.fromEntries(sortedPts.map((p,i)=>[p.id,i]));
+    const mu = sortedPts.map((p)=>p.ret);
+    const sigma = sortedPts.map((p)=>Math.max(p.riskUsd, 1));
+    const samples = 220;
+    for (let s=0; s<samples; s++) {
+      // Random simplex weights via normalized exponentials.
+      let wRaw = Array.from({length:n}, ()=> -Math.log(Math.max(1e-9, Math.random())));
+      const sumW = wRaw.reduce((a,b)=>a+b,0) || 1;
+      const w = wRaw.map((x)=>x/sumW);
+      const ret = w.reduce((acc,wi,i)=>acc + wi*mu[i], 0);
+      let varRisk = 0;
+      for (let i=0;i<n;i++){
+        for (let j=0;j<n;j++){
+          const cij = corr ? (corr[idToIdx[sortedPts[i].id]]?.[idToIdx[sortedPts[j].id]] ?? (i===j?1:0.35)) : (i===j?1:0.35);
+          varRisk += w[i]*w[j]*sigma[i]*sigma[j]*cij;
+        }
+      }
+      const riskUsd = Math.sqrt(Math.max(varRisk, 0));
+      const top = [...w.map((wi,i)=>({wi,i}))].sort((a,b)=>b.wi-a.wi).slice(0,3);
+      const mix = top.map((t)=>`${sortedPts[t.i].name.split(" ").slice(0,2).join(" ")} ${Math.round(t.wi*100)}%`).join(", ");
+      portfolios.push({ riskUsd, ret, mix });
+    }
+  }
+  const portfolioSorted = [...portfolios].sort((a,b)=>a.riskUsd-b.riskUsd);
+  let bestPortRet = -Infinity;
+  const efficientPortfolios = portfolioSorted.filter((pt)=>{
+    if (pt.ret > bestPortRet) { bestPortRet = pt.ret; return true; }
+    return false;
+  });
+  const allRiskVals = [...sortedPts.map((p)=>p.riskUsd), ...portfolios.map((p)=>p.riskUsd)];
+  const allRetVals = [...sortedPts.map((p)=>p.ret), ...portfolios.map((p)=>p.ret)];
+  const minRiskUsd = allRiskVals.length ? Math.min(...allRiskVals) : 0;
+  const maxRiskUsd = allRiskVals.length ? Math.max(...allRiskVals) : 100;
+  const minRet  = allRetVals.length ? Math.min(...allRetVals) : 0;
+  const maxRet  = allRetVals.length ? Math.max(...allRetVals) : 10;
   const xPad = Math.max((maxRiskUsd - minRiskUsd) * 0.08, 100000);
   const yPad = 1;
   const x0 = minRiskUsd - xPad, x1 = maxRiskUsd + xPad;
@@ -221,6 +258,7 @@ function Dashboard() {
   const sx = (v)=> 70 + ((v - x0) / Math.max(x1 - x0, 1e-9)) * 640;
   const sy = (v)=> 250 - ((v - y0) / Math.max(y1 - y0, 1e-9)) * 190;
   const efPath = efficientPts.map((p,idx)=> `${idx===0?"M":"L"} ${sx(p.riskUsd).toFixed(1)} ${sy(p.ret).toFixed(1)}`).join(" ");
+  const pfPath = efficientPortfolios.map((p,idx)=> `${idx===0?"M":"L"} ${sx(p.riskUsd).toFixed(1)} ${sy(p.ret).toFixed(1)}`).join(" ");
 
   return (
     <div>
@@ -280,7 +318,7 @@ function Dashboard() {
       <Card style={{marginBottom:14}}>
         <Label>Efficient Frontier (Risk vs Return)</Label>
         <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:10}}>
-          X-axis: risk as +/- dollar band (VaR99 - EAL) · Y-axis: annual EBITDA / CapEx (%) · frontier marks highest return at each risk level.
+          X-axis: risk as +/- dollar band (VaR99 - EAL) · Y-axis: annual EBITDA / CapEx (%) · includes single-project points plus possible portfolio make-ups.
         </div>
         {sortedPts.length===0 ? <Spinner/> : (
           <svg viewBox="0 0 780 290" style={{width:"100%",height:290,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
@@ -293,6 +331,13 @@ function Dashboard() {
             <text x="58" y="250" fill={T.textDim} fontSize="9" textAnchor="end">{minRet.toFixed(1)}%</text>
             <text x="58" y="40" fill={T.textDim} fontSize="9" textAnchor="end">{maxRet.toFixed(1)}%</text>
             {efPath && <path d={efPath} fill="none" stroke="#4ecdc4" strokeWidth="2.5" />}
+            {pfPath && <path d={pfPath} fill="none" stroke="#f0a040" strokeWidth="2" strokeDasharray="4 3" />}
+            {portfolios.map((p,idx)=>(
+              <g key={`pf-${idx}`}>
+                <circle cx={sx(p.riskUsd)} cy={sy(p.ret)} r="2.8" fill="#f0a040" opacity="0.5" />
+                <title>{`Portfolio mix: ${p.mix} | risk +/- ${fmtM(p.riskUsd)}, return ${p.ret.toFixed(2)}%`}</title>
+              </g>
+            ))}
             {sortedPts.map((p)=>(
               <g key={p.id}>
                 <circle cx={sx(p.riskUsd)} cy={sy(p.ret)} r="5" fill={typeColor(p.type)} opacity="0.95" />
@@ -301,9 +346,14 @@ function Dashboard() {
             ))}
           </svg>
         )}
+        <div style={{display:"flex",gap:16,marginTop:8,fontSize:10,color:T.textDim,fontFamily:T.mono}}>
+          <span><span style={{display:"inline-block",width:10,height:10,borderRadius:5,background:"#4ecdc4",marginRight:6}}/>Single projects</span>
+          <span><span style={{display:"inline-block",width:10,height:10,borderRadius:5,background:"#f0a040",marginRight:6}}/>Possible portfolio make-ups</span>
+        </div>
         <div style={{marginTop:10,fontSize:11,color:T.textMid,fontFamily:T.mono}}>
           <SourceHint sourceKey="risk_engine">Risk source: project losses (VaR99 - EAL), shown as +/- dollars.</SourceHint>{" · "}
-          <SourceHint sourceKey="financial_model">Return source: annual EBITDA from financial model.</SourceHint>
+          <SourceHint sourceKey="financial_model">Return source: annual EBITDA from financial model.</SourceHint>{" · "}
+          <SourceHint sourceKey="correlation_calc">Portfolio risk uses project-to-project correlation matrix and weighted variance.</SourceHint>
         </div>
       </Card>
       <Card>
