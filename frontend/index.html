@@ -84,26 +84,55 @@ const T = {
   mono:"'IBM Plex Mono', monospace", serif:"'Cormorant Garamond', serif",
 };
 
+const SOURCE_INFO = {
+  portfolio_calc: { from: "Derived from project register and risk engine outputs.", section: "risk-model", sectionLabel: "Risk Model" },
+  risk_engine: { from: "Computed by risk engine (factor scores + Monte Carlo losses).", section: "risk-model", sectionLabel: "Risk Model" },
+  naic_calc: { from: "Calculated in NAIC RBC workflow from modeled losses/exposures.", section: "naic", sectionLabel: "NAIC RBC" },
+  financial_model: { from: "Calculated from project financial assumptions and 10-year projection logic.", section: "financial-models", sectionLabel: "Financial Models" },
+  correlation_calc: { from: "Computed from factor correlation assumptions and project-profile similarity.", section: "correlation", sectionLabel: "Correlations" },
+};
+
+function SourceHint({sourceKey, children}) {
+  const src = SOURCE_INFO[sourceKey];
+  if (!src) return <>{children}</>;
+  const onNavigate = (e) => {
+    e.preventDefault();
+    window.dispatchEvent(new CustomEvent("navigate-section", { detail: { section: src.section } }));
+  };
+  return (
+    <span className="src-wrap" style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6}}>
+      <span>{children}</span>
+      <span style={{fontSize:9,color:"#4ecdc4",border:"1px solid #1e3f49",borderRadius:10,padding:"0 5px",lineHeight:"14px"}}>i</span>
+      <span className="src-box" style={{position:"absolute",left:0,top:"110%",zIndex:50,minWidth:250,maxWidth:320,background:"#08101d",border:`1px solid ${T.borderHi}`,borderRadius:6,padding:"8px 10px",opacity:0,pointerEvents:"none",transform:"translateY(4px)",transition:"all 0.12s"}}>
+        <div style={{fontSize:10,color:T.textMid,fontFamily:T.mono,lineHeight:1.5,marginBottom:8}}>{src.from}</div>
+        <button onClick={onNavigate} style={{fontSize:10,padding:"5px 8px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:4,color:"#4ecdc4",cursor:"pointer",fontFamily:T.mono}}>
+          Open {src.sectionLabel}
+        </button>
+      </span>
+    </span>
+  );
+}
+
 // ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
 const Card = ({children,style}) => <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:24,...style}}>{children}</div>;
 const Label = ({children}) => <div style={{fontSize:10,letterSpacing:3,textTransform:"uppercase",color:T.textDim,marginBottom:8,fontFamily:T.mono}}>{children}</div>;
 const Spinner = () => <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:60}}><div style={{width:24,height:24,border:`2px solid ${T.border}`,borderTopColor:"#4ecdc4",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/></div>;
 const Tag = ({children,color="#4a5580"}) => <span style={{fontSize:9,padding:"2px 7px",borderRadius:10,background:`${color}18`,color,border:`1px solid ${color}30`,fontFamily:T.mono,letterSpacing:1}}>{children}</span>;
 const Th = ({children}) => <th style={{padding:"8px 10px",color:T.textDim,fontSize:10,textTransform:"uppercase",letterSpacing:1,textAlign:"left",fontWeight:500,fontFamily:T.mono,borderBottom:`1px solid ${T.border}`}}>{children}</th>;
-const Td = ({children,mono,color}) => <td style={{padding:"11px 10px",color:color||T.textMid,fontFamily:mono?T.mono:undefined,borderBottom:`1px solid ${T.bg}`,fontSize:12}}>{children}</td>;
+const Td = ({children,mono,color,sourceKey}) => <td style={{padding:"11px 10px",color:color||T.textMid,fontFamily:mono?T.mono:undefined,borderBottom:`1px solid ${T.bg}`,fontSize:12}}><SourceHint sourceKey={sourceKey}>{children}</SourceHint></td>;
 const PageDescription = ({children}) => (
   <Card style={{marginBottom:16,padding:"14px 18px",background:"#091325",borderColor:T.borderHi}}>
     <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.7}}>{children}</div>
   </Card>
 );
 
-function KPI({label,value,sub,color,loading}) {
+function KPI({label,value,sub,color,loading,sourceKey}) {
   return (
     <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:"18px 22px",flex:1,minWidth:130}}>
       <Label>{label}</Label>
       {loading
         ? <div style={{height:32,background:T.border,borderRadius:4,width:"70%",animation:"pulse 1.5s infinite"}}/>
-        : <div style={{fontSize:24,fontWeight:700,color:color||T.text,fontFamily:T.serif,letterSpacing:-0.5}}>{value}</div>}
+        : <div style={{fontSize:24,fontWeight:700,color:color||T.text,fontFamily:T.serif,letterSpacing:-0.5}}><SourceHint sourceKey={sourceKey}>{value}</SourceHint></div>}
       {sub && <div style={{fontSize:11,color:T.textDim,marginTop:4,fontFamily:T.mono}}>{sub}</div>}
     </div>
   );
@@ -175,12 +204,12 @@ function Dashboard() {
         This dashboard summarizes portfolio-level exposure and loss outcomes using live project records plus synced external data. It combines project counts, capital at risk, expected annual loss, and NAIC capital requirements so you can see where risk is concentrated before drilling into model details.
       </PageDescription>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
-        <KPI label="Projects"        value={ps.length}                         sub="In portfolio"       loading={loading}/>
-        <KPI label="Total Capacity"  value={`${fmtN(totalMW)} MW`}            sub="All technologies"   loading={loading}/>
-        <KPI label="Total CapEx"     value={fmtM(totalCapex)}                  sub="Gross exposure"     loading={loading}/>
-        <KPI label="Portfolio EAL"   value={fmtM(portfolio?.total_eal)}        sub="Expected ann. loss" color="#f0a040" loading={loading}/>
-        <KPI label="VaR 99% (net)"   value={fmtM(portfolio?.total_var99_net)}  sub="Post-diversif."     color="#e85d5d" loading={loading}/>
-        <KPI label="NAIC RBC"        value={fmtM(naic?.portfolio_rbc_net)}     sub="Capital required"   color="#a78bfa" loading={loading}/>
+        <KPI label="Projects"        value={ps.length}                         sub="In portfolio"       loading={loading} sourceKey="portfolio_calc"/>
+        <KPI label="Total Capacity"  value={`${fmtN(totalMW)} MW`}            sub="All technologies"   loading={loading} sourceKey="portfolio_calc"/>
+        <KPI label="Total CapEx"     value={fmtM(totalCapex)}                  sub="Gross exposure"     loading={loading} sourceKey="portfolio_calc"/>
+        <KPI label="Portfolio EAL"   value={fmtM(portfolio?.total_eal)}        sub="Expected ann. loss" color="#f0a040" loading={loading} sourceKey="risk_engine"/>
+        <KPI label="VaR 99% (net)"   value={fmtM(portfolio?.total_var99_net)}  sub="Post-diversif."     color="#e85d5d" loading={loading} sourceKey="risk_engine"/>
+        <KPI label="NAIC RBC"        value={fmtM(naic?.portfolio_rbc_net)}     sub="Capital required"   color="#a78bfa" loading={loading} sourceKey="naic_calc"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
         <Card>
@@ -235,14 +264,14 @@ function Dashboard() {
                     <Td mono>{p.state}</Td>
                     <Td mono>{p.mw}</Td>
                     <Td mono>{fmtM(p.capex)}</Td>
-                    <Td mono color="#4ecdc4">{fmtM(fm.annual_revenue_usd)}</Td>
-                    <Td mono color={fm.dscr >= 1.3 ? "#4caf82" : fm.dscr >= 1.1 ? "#f0a040" : "#e85d5d"}>
+                    <Td mono color="#4ecdc4" sourceKey="financial_model">{fmtM(fm.annual_revenue_usd)}</Td>
+                    <Td mono color={fm.dscr >= 1.3 ? "#4caf82" : fm.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model">
                       {fm.dscr?.toFixed ? fm.dscr.toFixed(2) : "—"}
                     </Td>
                     <Td><Tag color={p.status==="Operating"?"#4caf82":p.status==="Construction"?"#f0a040":"#e85d5d"}>{p.status}</Tag></Td>
-                    <Td mono color={riskColor(pr.scores?.composite)}>{pr.scores?.composite?.toFixed(1)}</Td>
-                    <Td mono color="#f0a040">{fmtM(pr.losses?.eal)}</Td>
-                    <Td mono color="#e85d5d">{fmtM(pr.losses?.var_99)}</Td>
+                    <Td mono color={riskColor(pr.scores?.composite)} sourceKey="risk_engine">{pr.scores?.composite?.toFixed(1)}</Td>
+                    <Td mono color="#f0a040" sourceKey="risk_engine">{fmtM(pr.losses?.eal)}</Td>
+                    <Td mono color="#e85d5d" sourceKey="risk_engine">{fmtM(pr.losses?.var_99)}</Td>
                   </tr>
                 );
               })}
@@ -410,10 +439,10 @@ function FinancialModels() {
         {selected && <>
           <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
             <KPI label="Project" value={selected.project_name} sub={`${selected.project_type} · ${selected.state}`}/>
-            <KPI label="Annual Revenue (Y1)" value={fmtM(metrics.annual_revenue_usd)} color="#4ecdc4"/>
-            <KPI label="Annual EBITDA (Y1)" value={fmtM(metrics.annual_ebitda_usd)} color="#4caf82"/>
-            <KPI label="DSCR (Y1)" value={metrics.dscr?.toFixed ? metrics.dscr.toFixed(2) : "—"} color={metrics.dscr >= 1.3 ? "#4caf82" : metrics.dscr >= 1.1 ? "#f0a040" : "#e85d5d"}/>
-            <KPI label="Payback" value={metrics.payback_years ? `${metrics.payback_years.toFixed(1)} yrs` : "—"} color="#a78bfa"/>
+            <KPI label="Annual Revenue (Y1)" value={fmtM(metrics.annual_revenue_usd)} color="#4ecdc4" sourceKey="financial_model"/>
+            <KPI label="Annual EBITDA (Y1)" value={fmtM(metrics.annual_ebitda_usd)} color="#4caf82" sourceKey="financial_model"/>
+            <KPI label="DSCR (Y1)" value={metrics.dscr?.toFixed ? metrics.dscr.toFixed(2) : "—"} color={metrics.dscr >= 1.3 ? "#4caf82" : metrics.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model"/>
+            <KPI label="Payback" value={metrics.payback_years ? `${metrics.payback_years.toFixed(1)} yrs` : "—"} color="#a78bfa" sourceKey="financial_model"/>
           </div>
           <Card style={{marginBottom:14}}>
             <Label>Model Assumptions</Label>
@@ -438,43 +467,43 @@ function FinancialModels() {
               <tbody>
                 <tr>
                   <Td mono color={T.text}>Revenue</Td>
-                  {rows.map((r)=> <Td key={`rev${r.year}`} mono color="#4ecdc4">{withVar(r.revenue_usd, r.variance?.revenue_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`rev${r.year}`} mono color="#4ecdc4" sourceKey="financial_model">{withVar(r.revenue_usd, r.variance?.revenue_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Opex</Td>
-                  {rows.map((r)=> <Td key={`opx${r.year}`} mono>{withVar(r.opex_usd, r.variance?.opex_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`opx${r.year}`} mono sourceKey="financial_model">{withVar(r.opex_usd, r.variance?.opex_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>EBITDA</Td>
-                  {rows.map((r)=> <Td key={`ebt${r.year}`} mono color="#4caf82">{withVar(r.ebitda_usd, r.variance?.ebitda_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`ebt${r.year}`} mono color="#4caf82" sourceKey="financial_model">{withVar(r.ebitda_usd, r.variance?.ebitda_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Interest</Td>
-                  {rows.map((r)=> <Td key={`int${r.year}`} mono>{withVar(r.interest_usd, r.variance?.interest_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`int${r.year}`} mono sourceKey="financial_model">{withVar(r.interest_usd, r.variance?.interest_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Principal</Td>
-                  {rows.map((r)=> <Td key={`pri${r.year}`} mono>{withVar(r.principal_usd, r.variance?.principal_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`pri${r.year}`} mono sourceKey="financial_model">{withVar(r.principal_usd, r.variance?.principal_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Debt Service</Td>
-                  {rows.map((r)=> <Td key={`deb${r.year}`} mono>{withVar(r.debt_service_usd, r.variance?.debt_service_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`deb${r.year}`} mono sourceKey="financial_model">{withVar(r.debt_service_usd, r.variance?.debt_service_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Net Cash Flow</Td>
-                  {rows.map((r)=> <Td key={`ncf${r.year}`} mono color={r.net_cashflow_usd >= 0 ? "#4caf82" : "#e85d5d"}>{withVar(r.net_cashflow_usd, r.variance?.net_cashflow_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`ncf${r.year}`} mono color={r.net_cashflow_usd >= 0 ? "#4caf82" : "#e85d5d"} sourceKey="financial_model">{withVar(r.net_cashflow_usd, r.variance?.net_cashflow_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>DSCR</Td>
-                  {rows.map((r)=> <Td key={`dsc${r.year}`} mono color={r.dscr >= 1.3 ? "#4caf82" : r.dscr >= 1.1 ? "#f0a040" : "#e85d5d"}>{withVarNum(r.dscr, r.variance?.dscr, 2)}</Td>)}
+                  {rows.map((r)=> <Td key={`dsc${r.year}`} mono color={r.dscr >= 1.3 ? "#4caf82" : r.dscr >= 1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model">{withVarNum(r.dscr, r.variance?.dscr, 2)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Cumulative CF</Td>
-                  {rows.map((r)=> <Td key={`ccf${r.year}`} mono color="#a78bfa">{withVar(r.cumulative_cashflow_usd, r.variance?.cumulative_cashflow_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`ccf${r.year}`} mono color="#a78bfa" sourceKey="financial_model">{withVar(r.cumulative_cashflow_usd, r.variance?.cumulative_cashflow_usd)}</Td>)}
                 </tr>
                 <tr>
                   <Td mono color={T.text}>Ending Debt</Td>
-                  {rows.map((r)=> <Td key={`end${r.year}`} mono>{withVar(r.ending_debt_usd, r.variance?.ending_debt_usd)}</Td>)}
+                  {rows.map((r)=> <Td key={`end${r.year}`} mono sourceKey="financial_model">{withVar(r.ending_debt_usd, r.variance?.ending_debt_usd)}</Td>)}
                 </tr>
               </tbody>
             </table>
@@ -517,7 +546,7 @@ function CorrelationMatrix() {
                   {row.map((v,j)=>(
                     <td key={j} style={{padding:2}}>
                       <div style={{width:46,height:30,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.5?"#fff":T.textMid,fontSize:10}}>
-                        {v.toFixed(2)}
+                        <SourceHint sourceKey="correlation_calc">{v.toFixed(2)}</SourceHint>
                       </div>
                     </td>
                   ))}
@@ -551,7 +580,7 @@ function CorrelationMatrix() {
                   {row.map((v,j)=>(
                     <td key={j} style={{padding:2}}>
                       <div style={{width:44,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.55?"#fff":T.textMid,fontSize:9}} title={`${inter?.full_names?.[i]} × ${inter?.full_names?.[j]}`}>
-                        {Number(v).toFixed(2)}
+                        <SourceHint sourceKey="correlation_calc">{Number(v).toFixed(2)}</SourceHint>
                       </div>
                     </td>
                   ))}
@@ -815,6 +844,15 @@ function App() {
     return ()=>clearInterval(id);
   },[]);
 
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const section = e?.detail?.section;
+      if (section) setActive(section);
+    };
+    window.addEventListener("navigate-section", onNavigate);
+    return () => window.removeEventListener("navigate-section", onNavigate);
+  }, []);
+
   const handleSync = async()=>{
     setPipeline(true);
     await api("/api/pipeline/run",{method:"POST"});
@@ -846,6 +884,7 @@ function App() {
         textarea::placeholder,input::placeholder{color:${T.textDim};}
         button{transition:opacity 0.12s;font-family:inherit;}
         button:hover:not(:disabled){opacity:0.8;}
+        .src-wrap:hover .src-box{opacity:1;pointer-events:auto;transform:translateY(0);}
         @keyframes spin{to{transform:rotate(360deg);}}
         @keyframes pulse{0%,100%{opacity:0.4;}50%{opacity:0.8;}}
       `}</style>
