@@ -113,6 +113,107 @@ def _offtake_price_usd_mwh(offtake: str) -> float:
     return by_offtake.get(offtake, 75.0)
 
 
+SUBCOMPONENT_SPECS = [
+    ("Tech Maturity", "technology", "Technology readiness and proven deployment."),
+    ("Tech Supply Chain", "technology", "Critical component and EPC supply-chain risk."),
+    ("Licensing Complexity", "regulatory", "Permit/NRC review complexity and uncertainty."),
+    ("Policy Stability", "regulatory", "State/federal policy and market rule volatility."),
+    ("Schedule Pressure", "construction", "Probability of timeline slippage."),
+    ("Cost Overrun Risk", "construction", "Likelihood of capex overrun versus plan."),
+    ("Offtake Credit", "counterparty", "Counterparty credit/contract resilience."),
+    ("Contract Structure", "counterparty", "Contract terms and merchant exposure."),
+    ("Seismic Exposure", "physical", "Geologic and seismic hazard sensitivity."),
+    ("Climate Exposure", "physical", "Weather and long-term climate hazard pressure."),
+    ("Rate Sensitivity", "financial", "Interest-rate and refinancing sensitivity."),
+    ("Refinance Risk", "financial", "Future refinancing / covenant stress risk."),
+    ("Asset Reliability", "operational", "Operational reliability and forced outage risk."),
+    ("Dispatch Flexibility", "operational", "Operational flexibility under market stress."),
+    ("Labor Availability", "workforce", "Skilled labor availability and retention."),
+    ("Safety Culture", "workforce", "Training/safety culture and incident prevention."),
+]
+
+
+def build_project_subcomponents(project: dict) -> dict:
+    """Build per-project correlation subcomponent scores (0-100)."""
+    tech = project.get("type", "Geothermal")
+    status = project.get("status", "Development")
+    offtake = project.get("offtake", "Merchant")
+    state = project.get("state", "")
+    capex = float(project.get("capex", 0))
+
+    tech_base = {
+        "Geothermal": {"technology": 55, "regulatory": 45, "construction": 60, "operational": 50},
+        "Nuclear SMR": {"technology": 78, "regulatory": 82, "construction": 75, "operational": 45},
+        "Battery Storage": {"technology": 35, "regulatory": 30, "construction": 40, "operational": 42},
+    }.get(tech, {"technology": 50, "regulatory": 50, "construction": 50, "operational": 50})
+    status_mult = {"Development": 1.25, "Construction": 1.40, "Operating": 0.75, "Decommissioning": 1.10}.get(status, 1.0)
+    offtake_base = {"PPA-Utility": 30, "PPA-Commercial": 48, "Merchant": 72, "Self-Supply": 55}.get(offtake, 55)
+
+    physical_seed = 55 if state in {"CA", "NV", "AK", "HI", "WA"} else 40
+    financial_seed = 45 + max(0, (capex / 1e9 - 0.5) * 8)
+    workforce_seed = {"Nuclear SMR": 65, "Geothermal": 45, "Battery Storage": 35}.get(tech, 45)
+    parent_scores = {
+        "technology": tech_base["technology"] * status_mult,
+        "regulatory": tech_base["regulatory"] * status_mult,
+        "construction": tech_base["construction"] * status_mult,
+        "counterparty": offtake_base * status_mult,
+        "physical": physical_seed * status_mult,
+        "financial": financial_seed * status_mult,
+        "operational": tech_base["operational"] * status_mult,
+        "workforce": workforce_seed * status_mult,
+    }
+
+    split_offsets = {
+        "technology": (+6, -4),
+        "regulatory": (+5, -3),
+        "construction": (+7, -2),
+        "counterparty": (+4, -4),
+        "physical": (+8, -5),
+        "financial": (+6, -3),
+        "operational": (+5, -4),
+        "workforce": (+6, -2),
+    }
+    parent_idx = {}
+    subs = {}
+    for label, parent, desc in SUBCOMPONENT_SPECS:
+        parent_idx[parent] = parent_idx.get(parent, 0)
+        off = split_offsets[parent][parent_idx[parent] % 2]
+        parent_idx[parent] += 1
+        val = max(0.0, min(99.0, parent_scores[parent] + off))
+        subs[label] = {"score": round(val, 2), "parent_factor": parent, "description": desc}
+    return subs
+
+
+def _build_subcomponent_matrix() -> dict:
+    labels = [x[0] for x in SUBCOMPONENT_SPECS]
+    parent_by_label = {x[0]: x[1] for x in SUBCOMPONENT_SPECS}
+    desc_by_label = {x[0]: x[2] for x in SUBCOMPONENT_SPECS}
+    factor_index = {k: i for i, k in enumerate(FACTOR_KEYS)}
+    matrix = []
+    for li in labels:
+        row = []
+        for lj in labels:
+            if li == lj:
+                row.append(1.0)
+                continue
+            pi = parent_by_label[li]
+            pj = parent_by_label[lj]
+            base = CORR[factor_index[pi]][factor_index[pj]]
+            if pi == pj:
+                base = min(0.95, base + 0.28)
+            row.append(round(max(0.05, min(0.99, base)), 3))
+        matrix.append(row)
+    weights = [round(RISK_WEIGHTS[parent_by_label[l]] / 2.0, 4) for l in labels]
+    return {
+        "labels": labels,
+        "keys": [l.lower().replace(" ", "_") for l in labels],
+        "matrix": matrix,
+        "weights": weights,
+        "parents": [parent_by_label[l] for l in labels],
+        "descriptions": [desc_by_label[l] for l in labels],
+    }
+
+
 def _variance_assumptions(project_type: str) -> dict:
     by_type = {
         "Geothermal": {
@@ -303,8 +404,19 @@ def attach_financial_model(project: dict) -> dict:
     return project
 
 
+def attach_project_subcomponents(project: dict) -> dict:
+    project["correlation_subcomponents"] = build_project_subcomponents(project)
+    return project
+
+
+def attach_project_analytics(project: dict) -> dict:
+    attach_project_subcomponents(project)
+    attach_financial_model(project)
+    return project
+
+
 for _p in _projects:
-    attach_financial_model(_p)
+    attach_project_analytics(_p)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH / META
@@ -372,7 +484,7 @@ def list_projects():
 @app.post("/api/projects")
 def add_project(project: ProjectIn):
     new_id = f"p{len(_projects) + 1}"
-    p = attach_financial_model({"id": new_id, **project.dict()})
+    p = attach_project_analytics({"id": new_id, **project.dict()})
     _projects.append(p)
     return {"status": "created", "project": p}
 
@@ -436,7 +548,7 @@ async def upload_projects(file: UploadFile = File(...)):
                     "offtake": row["offtake"].strip(),
                     "status":  row["status"].strip(),
                 }
-                p = attach_financial_model(p)
+                p = attach_project_analytics(p)
                 added.append(p)
             except Exception as e:
                 errors.append({"row": i + 2, "error": str(e)})
@@ -480,13 +592,14 @@ def analyze_portfolio():
 
 @app.get("/api/risk/correlation")
 def get_correlation():
-    labels = [k.replace("_", " ").title() for k in FACTOR_KEYS]
-    weights = [RISK_WEIGHTS[k] for k in FACTOR_KEYS]
+    sub = _build_subcomponent_matrix()
     return {
-        "labels":  labels,
-        "keys":    FACTOR_KEYS,
-        "matrix":  CORR,
-        "weights": weights,
+        "labels": sub["labels"],
+        "keys": sub["keys"],
+        "matrix": sub["matrix"],
+        "weights": sub["weights"],
+        "parent_factors": sub["parents"],
+        "descriptions": sub["descriptions"],
     }
 
 
@@ -507,18 +620,11 @@ def get_between_projects_correlation():
             "method": "",
         }
 
-    engine = get_engine()
     score_vecs = []
     for p in _projects:
-        s = engine.score_project(
-            technology=p["type"],
-            state=p["state"],
-            capex=p["capex"],
-            mw=p["mw"],
-            status=p["status"],
-            offtake=p["offtake"],
-        )
-        score_vecs.append([float(s[k]) for k in FACTOR_KEYS])
+        subs = p.get("correlation_subcomponents") or build_project_subcomponents(p)
+        labels = [x[0] for x in SUBCOMPONENT_SPECS]
+        score_vecs.append([float(subs[l]["score"]) for l in labels])
 
     n = len(_projects)
 
@@ -535,7 +641,7 @@ def get_between_projects_correlation():
         nj = math.sqrt(sum(b * b for b in cj)) or 1e-9
         r = dot / (ni * nj)
         r = max(-1.0, min(1.0, r))
-        base = 0.42 + 0.48 * r
+        base = 0.40 + 0.50 * r
         pi, pj = _projects[i], _projects[j]
         if pi["type"] == pj["type"]:
             base += 0.08
@@ -557,8 +663,8 @@ def get_between_projects_correlation():
         "matrix": matrix,
         "count": n,
         "method": (
-            "Factor-profile similarity: centered correlation of eight risk factor scores, "
-            "plus small bonuses for shared technology type and state."
+            "Subcomponent-profile similarity: centered correlation of 16 project "
+            "subcomponent scores, plus bonuses for shared technology type and state."
         ),
     }
 

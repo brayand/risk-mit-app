@@ -144,7 +144,7 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
     {id:"dashboard",   label:"Portfolio Overview", icon:"⬡"},
     {id:"add-project", label:"Add Project",         icon:"+"},
     {id:"risk-model",  label:"Risk Model",          icon:"◈"},
-    {id:"financial-models", label:"Financial Models", icon:"$"},
+    {id:"financial-models", label:"Project Description", icon:"$"},
     {id:"correlation", label:"Correlations",        icon:"⊞"},
     {id:"naic",        label:"NAIC RBC",            icon:"◉"},
     {id:"data-feeds",  label:"Data Feeds",          icon:"⟁"},
@@ -468,6 +468,7 @@ function RiskModel() {
 // ─── FINANCIAL MODELS ────────────────────────────────────────────────────────
 function FinancialModels() {
   const {data,loading} = useApi("/api/financial-models");
+  const {data:portfolioRisk,loading:loadingRisk} = useApi("/api/risk/portfolio");
   const [sel,setSel] = useState(0);
   const models = data?.models || [];
   const selected = models[sel];
@@ -475,12 +476,14 @@ function FinancialModels() {
   const assumptions = fm.assumptions || {};
   const metrics = fm.metrics || {};
   const rows = fm.yearly_projection || [];
+  const riskRows = portfolioRisk?.projects || [];
+  const selectedRisk = riskRows[sel];
 
   return (
     <div>
       <div style={{marginBottom:28}}>
         <Label>Project Finance</Label>
-        <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Financial Models</h1>
+        <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Project Description</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>10-year deterministic annual projections by project</p>
       </div>
       <PageDescription>
@@ -503,6 +506,20 @@ function FinancialModels() {
             <KPI label="IRR (10Y)" value={metrics.irr_pct!=null ? `${metrics.irr_pct.toFixed(2)}%` : "—"} color="#a78bfa" sourceKey="financial_model"/>
             <KPI label="Payback" value={metrics.payback_years ? `${metrics.payback_years.toFixed(1)} yrs` : "—"} color="#a78bfa" sourceKey="financial_model"/>
           </div>
+          <Card style={{marginBottom:14}}>
+            <Label>Risk Measures</Label>
+            {loadingRisk ? <Spinner/> : !selectedRisk ? (
+              <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>Risk measures unavailable for selected project.</div>
+            ) : (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(150px,1fr))",gap:10}}>
+                <KPI label="Composite Risk" value={selectedRisk.scores?.composite?.toFixed ? selectedRisk.scores.composite.toFixed(1) : "—"} color={riskColor(selectedRisk.scores?.composite)} sourceKey="risk_engine"/>
+                <KPI label="Expected Annual Loss" value={fmtM(selectedRisk.losses?.eal)} color="#4caf82" sourceKey="risk_engine"/>
+                <KPI label="VaR 95%" value={fmtM(selectedRisk.losses?.var_95)} color="#f0a040" sourceKey="risk_engine"/>
+                <KPI label="VaR 99%" value={fmtM(selectedRisk.losses?.var_99)} color="#e85d5d" sourceKey="risk_engine"/>
+                <KPI label="TVaR 99%" value={fmtM(selectedRisk.losses?.tvar_99)} color="#ff6b6b" sourceKey="risk_engine"/>
+              </div>
+            )}
+          </Card>
           <Card style={{marginBottom:14}}>
             <Label>Model Assumptions</Label>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(160px,1fr))",gap:10,fontSize:12}}>
