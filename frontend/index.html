@@ -247,6 +247,22 @@ function Dashboard() {
   });
   const allRiskVals = [...sortedPts.map((p)=>p.riskUsd), ...portfolios.map((p)=>p.riskUsd)];
   const allRetVals = [...sortedPts.map((p)=>p.ret), ...portfolios.map((p)=>p.ret)];
+  const capexWeights = ps.map((p)=>p.capex || 0);
+  const capexTotal = capexWeights.reduce((a,b)=>a+b,0) || 1;
+  const normalizedW = capexWeights.map((w)=>w/capexTotal);
+  const currentRet = sortedPts.length
+    ? sortedPts.reduce((acc,p,idx)=>acc + (normalizedW[idx] || 0)*p.ret, 0)
+    : null;
+  const currentRiskUsd = (portfolio?.total_var99_net!=null && portfolio?.total_eal!=null)
+    ? Math.max((portfolio.total_var99_net - portfolio.total_eal), 0)
+    : null;
+  const currentPortfolioPoint = (currentRet!=null && currentRiskUsd!=null)
+    ? { riskUsd: currentRiskUsd, ret: currentRet }
+    : null;
+  if (currentPortfolioPoint) {
+    allRiskVals.push(currentPortfolioPoint.riskUsd);
+    allRetVals.push(currentPortfolioPoint.ret);
+  }
   const minRiskUsd = allRiskVals.length ? Math.min(...allRiskVals) : 0;
   const maxRiskUsd = allRiskVals.length ? Math.max(...allRiskVals) : 100;
   const minRet  = allRetVals.length ? Math.min(...allRetVals) : 0;
@@ -344,11 +360,19 @@ function Dashboard() {
                 <title>{`${p.name}: risk +/- ${fmtM(p.riskUsd)}, return ${p.ret.toFixed(2)}%`}</title>
               </g>
             ))}
+            {currentPortfolioPoint && (
+              <g>
+                <circle cx={sx(currentPortfolioPoint.riskUsd)} cy={sy(currentPortfolioPoint.ret)} r="6.8" fill="#ffffff" opacity="0.95" />
+                <circle cx={sx(currentPortfolioPoint.riskUsd)} cy={sy(currentPortfolioPoint.ret)} r="3.8" fill="#ff6b6b" opacity="1" />
+                <title>{`Current portfolio: risk +/- ${fmtM(currentPortfolioPoint.riskUsd)}, return ${currentPortfolioPoint.ret.toFixed(2)}%`}</title>
+              </g>
+            )}
           </svg>
         )}
         <div style={{display:"flex",gap:16,marginTop:8,fontSize:10,color:T.textDim,fontFamily:T.mono}}>
           <span><span style={{display:"inline-block",width:10,height:10,borderRadius:5,background:"#4ecdc4",marginRight:6}}/>Single projects</span>
           <span><span style={{display:"inline-block",width:10,height:10,borderRadius:5,background:"#f0a040",marginRight:6}}/>Possible portfolio make-ups</span>
+          <span><span style={{display:"inline-block",width:10,height:10,borderRadius:5,background:"#ff6b6b",marginRight:6,border:"1px solid #fff"}}/>Current portfolio</span>
         </div>
         <div style={{marginTop:10,fontSize:11,color:T.textMid,fontFamily:T.mono}}>
           <SourceHint sourceKey="risk_engine">Risk source: project losses (VaR99 - EAL), shown as +/- dollars.</SourceHint>{" · "}
