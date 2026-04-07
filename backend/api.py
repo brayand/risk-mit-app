@@ -75,6 +75,150 @@ def fmt_m(n):
     if abs(n) >= 1e9: return f"${n/1e9:.2f}B"
     return f"${n/1e6:.1f}M"
 
+
+def _project_financial_assumptions(project_type: str) -> dict:
+    by_type = {
+        "Geothermal": {
+            "capacity_factor": 0.88,
+            "opex_ratio": 0.030,
+            "debt_ratio": 0.55,
+            "debt_rate": 0.0675,
+            "debt_tenor_years": 18,
+        },
+        "Nuclear SMR": {
+            "capacity_factor": 0.92,
+            "opex_ratio": 0.025,
+            "debt_ratio": 0.65,
+            "debt_rate": 0.0725,
+            "debt_tenor_years": 22,
+        },
+        "Battery Storage": {
+            "capacity_factor": 0.22,
+            "opex_ratio": 0.020,
+            "debt_ratio": 0.50,
+            "debt_rate": 0.0700,
+            "debt_tenor_years": 12,
+        },
+    }
+    return by_type.get(project_type, by_type["Geothermal"])
+
+
+def _offtake_price_usd_mwh(offtake: str) -> float:
+    by_offtake = {
+        "PPA-Utility": 72.0,
+        "PPA-Commercial": 85.0,
+        "Merchant": 95.0,
+        "Self-Supply": 65.0,
+    }
+    return by_offtake.get(offtake, 75.0)
+
+
+def build_financial_model(project: dict) -> dict:
+    assumptions = _project_financial_assumptions(project["type"])
+    price_usd_mwh = _offtake_price_usd_mwh(project.get("offtake", "Merchant"))
+
+    annual_generation_mwh = float(project["mw"]) * 8760 * assumptions["capacity_factor"]
+    annual_revenue_usd = annual_generation_mwh * price_usd_mwh
+    annual_opex_usd = float(project["capex"]) * assumptions["opex_ratio"]
+    annual_ebitda_usd = annual_revenue_usd - annual_opex_usd
+
+    debt_principal_usd = float(project["capex"]) * assumptions["debt_ratio"]
+    equity_usd = float(project["capex"]) - debt_principal_usd
+    debt_rate = assumptions["debt_rate"]
+    debt_tenor = assumptions["debt_tenor_years"]
+    if debt_rate > 0:
+        annuity = debt_rate / (1 - (1 + debt_rate) ** (-debt_tenor))
+        annual_debt_service_usd = debt_principal_usd * annuity
+    else:
+        annual_debt_service_usd = debt_principal_usd / debt_tenor if debt_tenor else 0.0
+    dscr = (annual_ebitda_usd / annual_debt_service_usd) if annual_debt_service_usd else None
+
+    net_operating_cashflow_usd = annual_ebitda_usd - annual_debt_service_usd
+    payback_years = (
+        float(project["capex"]) / annual_ebitda_usd
+        if annual_ebitda_usd > 0 else None
+    )
+
+    # 10-year projection uses simple escalators to show trajectory over time.
+    # This is deterministic and intended for underwriting-side scenario baselining.
+    production_decay = 0.003 if project["type"] != "Battery Storage" else 0.010
+    price_escalator = 0.020
+    opex_escalator = 0.025
+    remaining_debt = debt_principal_usd
+    yearly_projection = []
+    cumulative_cashflow = 0.0
+
+    for year in range(1, 11):
+        gen_y = annual_generation_mwh * ((1 - production_decay) ** (year - 1))
+        price_y = price_usd_mwh * ((1 + price_escalator) ** (year - 1))
+        revenue_y = gen_y * price_y
+        opex_y = annual_opex_usd * ((1 + opex_escalator) ** (year - 1))
+        ebitda_y = revenue_y - opex_y
+
+        if year <= debt_tenor and remaining_debt > 0:
+            interest_y = remaining_debt * debt_rate
+            principal_y = max(annual_debt_service_usd - interest_y, 0.0)
+            principal_y = min(principal_y, remaining_debt)
+            debt_service_y = interest_y + principal_y
+            remaining_debt = max(remaining_debt - principal_y, 0.0)
+        else:
+            interest_y = 0.0
+            principal_y = 0.0
+            debt_service_y = 0.0
+
+        net_cashflow_y = ebitda_y - debt_service_y
+        cumulative_cashflow += net_cashflow_y
+        dscr_y = (ebitda_y / debt_service_y) if debt_service_y > 0 else None
+
+        yearly_projection.append({
+            "year": year,
+            "generation_mwh": round(gen_y, 2),
+            "price_usd_mwh": round(price_y, 2),
+            "revenue_usd": round(revenue_y, 2),
+            "opex_usd": round(opex_y, 2),
+            "ebitda_usd": round(ebitda_y, 2),
+            "interest_usd": round(interest_y, 2),
+            "principal_usd": round(principal_y, 2),
+            "debt_service_usd": round(debt_service_y, 2),
+            "net_cashflow_usd": round(net_cashflow_y, 2),
+            "cumulative_cashflow_usd": round(cumulative_cashflow, 2),
+            "ending_debt_usd": round(remaining_debt, 2),
+            "dscr": round(dscr_y, 3) if dscr_y is not None else None,
+        })
+
+    return {
+        "assumptions": {
+            "capacity_factor": assumptions["capacity_factor"],
+            "price_usd_mwh": price_usd_mwh,
+            "opex_ratio": assumptions["opex_ratio"],
+            "debt_ratio": assumptions["debt_ratio"],
+            "debt_rate": assumptions["debt_rate"],
+            "debt_tenor_years": assumptions["debt_tenor_years"],
+        },
+        "metrics": {
+            "annual_generation_mwh": round(annual_generation_mwh, 2),
+            "annual_revenue_usd": round(annual_revenue_usd, 2),
+            "annual_opex_usd": round(annual_opex_usd, 2),
+            "annual_ebitda_usd": round(annual_ebitda_usd, 2),
+            "debt_principal_usd": round(debt_principal_usd, 2),
+            "equity_usd": round(equity_usd, 2),
+            "annual_debt_service_usd": round(annual_debt_service_usd, 2),
+            "net_operating_cashflow_usd": round(net_operating_cashflow_usd, 2),
+            "dscr": round(dscr, 3) if dscr is not None else None,
+            "payback_years": round(payback_years, 2) if payback_years is not None else None,
+        },
+        "yearly_projection": yearly_projection,
+    }
+
+
+def attach_financial_model(project: dict) -> dict:
+    project["financial_model"] = build_financial_model(project)
+    return project
+
+
+for _p in _projects:
+    attach_financial_model(_p)
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH / META
 # ══════════════════════════════════════════════════════════════════════════════
@@ -141,7 +285,7 @@ def list_projects():
 @app.post("/api/projects")
 def add_project(project: ProjectIn):
     new_id = f"p{len(_projects) + 1}"
-    p = {"id": new_id, **project.dict()}
+    p = attach_financial_model({"id": new_id, **project.dict()})
     _projects.append(p)
     return {"status": "created", "project": p}
 
@@ -154,6 +298,33 @@ def delete_project(project_id: str):
     if len(_projects) == before:
         raise HTTPException(404, "Project not found")
     return {"status": "deleted"}
+
+
+@app.get("/api/projects/{project_id}/financial-model")
+def get_project_financial_model(project_id: str):
+    p = next((x for x in _projects if x["id"] == project_id), None)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    return {
+        "project_id": p["id"],
+        "project_name": p["name"],
+        "financial_model": p.get("financial_model") or build_financial_model(p),
+    }
+
+
+@app.get("/api/financial-models")
+def list_financial_models():
+    models = []
+    for p in _projects:
+        fm = p.get("financial_model") or build_financial_model(p)
+        models.append({
+            "project_id": p["id"],
+            "project_name": p["name"],
+            "project_type": p["type"],
+            "state": p["state"],
+            "financial_model": fm,
+        })
+    return {"models": models, "count": len(models)}
 
 
 @app.post("/api/projects/upload")
@@ -178,6 +349,7 @@ async def upload_projects(file: UploadFile = File(...)):
                     "offtake": row["offtake"].strip(),
                     "status":  row["status"].strip(),
                 }
+                p = attach_financial_model(p)
                 added.append(p)
             except Exception as e:
                 errors.append({"row": i + 2, "error": str(e)})
