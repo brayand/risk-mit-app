@@ -488,32 +488,9 @@ function FinancialModels() {
 // ─── CORRELATION ─────────────────────────────────────────────────────────────
 function CorrelationMatrix() {
   const {data,loading} = useApi("/api/risk/correlation");
-  const {data: projData} = useApi("/api/projects");
-  const [projSel,setProjSel] = useState(0);
-  const [corrProj,setCorrProj] = useState(null);
-  const [corrProjLoading,setCorrProjLoading] = useState(false);
-  const projects = projData?.projects || [];
-  const selectedProj = projects[projSel];
+  const {data: inter, loading: interLoading} = useApi("/api/risk/correlation/between-projects");
 
   const corrColor = (v) => { const r=Math.round(255*v),b=Math.round(255*(1-v)); return `rgba(${r},70,${b},${0.25+v*0.75})`; };
-
-  useEffect(() => {
-    const pid = selectedProj?.id;
-    if (!pid) {
-      setCorrProj(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setCorrProjLoading(true);
-      const result = await api(`/api/risk/correlation/project/${pid}`);
-      if (!cancelled) {
-        setCorrProj(result || null);
-        setCorrProjLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedProj?.id]);
 
   return (
     <div>
@@ -551,54 +528,38 @@ function CorrelationMatrix() {
         </Card>
       )}
       <Card style={{marginTop:14,overflowX:"auto"}}>
-        <Label>Per-Project Correlation Matrix</Label>
+        <Label>Project-to-Project Correlation</Label>
         <p style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginTop:8,lineHeight:1.6}}>
-          Adjusted from the portfolio baseline using project risk scores and technology anchor factor. Select a project to compare dependency structure used in that project’s simulation context.
+          {inter?.method || "Implied co-movement between projects from aligned risk factor profiles, shared technology, and shared state exposure."}
         </p>
-        {projects.length === 0 ? (
-          <div style={{color:T.textDim,fontSize:12,fontFamily:T.mono,marginTop:12}}>No projects loaded.</div>
-        ) : <>
-          <div style={{display:"flex",gap:8,marginTop:14,marginBottom:16,flexWrap:"wrap"}}>
-            {projects.map((p,i)=>(
-              <button key={p.id} onClick={()=>setProjSel(i)} style={{padding:"7px 16px",borderRadius:20,border:`1px solid ${projSel===i?typeColor(p.type):T.border}`,background:projSel===i?`${typeColor(p.type)}15`:"transparent",color:projSel===i?typeColor(p.type):T.textDim,fontSize:11,cursor:"pointer",fontFamily:T.mono}}>
-                {typeIcon(p.type)} {p.name?.split(" ").slice(0,3).join(" ")}
-              </button>
-            ))}
-          </div>
-          {corrProjLoading ? <Spinner/> : !corrProj ? (
-            <div style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Unable to load project correlation matrix.</div>
-          ) : (
-            <>
-              <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:10}}>
-                <span style={{color:T.text}}>{corrProj.project_name}</span> · Anchor factor: <span style={{color:T.text}}>{corrProj.anchor_factor?.replace("_"," ")}</span> · Score adjustment: <span style={{color:T.text}}>{corrProj.score_adjustment}</span>
-              </div>
-              <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono}}>
-                <thead><tr>
-                  <th style={{width:130}}/>
-                  {(corrProj.labels||[]).map((l,i)=>(
-                    <th key={i} style={{padding:"4px 3px",color:T.textDim,fontWeight:500,textAlign:"center",width:56}}>
-                      <div style={{transform:"rotate(-40deg)",whiteSpace:"nowrap",transformOrigin:"bottom left",marginLeft:8,marginBottom:4,fontSize:9}}>{l}</div>
-                    </th>
+        {interLoading ? <Spinner/> : (inter?.count || 0) === 0 ? (
+          <div style={{color:T.textDim,fontSize:12,fontFamily:T.mono,marginTop:12}}>No projects in portfolio.</div>
+        ) : (
+          <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono,marginTop:14}}>
+            <thead><tr>
+              <th style={{width:140,minWidth:120}}/>
+              {(inter?.labels||[]).map((l,i)=>(
+                <th key={i} style={{padding:"4px 3px",color:T.textDim,fontWeight:500,textAlign:"center",minWidth:48}} title={inter?.full_names?.[i]}>
+                  <div style={{transform:"rotate(-40deg)",whiteSpace:"nowrap",transformOrigin:"bottom left",marginLeft:10,marginBottom:4,fontSize:8,maxWidth:90}}>{l}</div>
+                </th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {(inter?.matrix||[]).map((row,i)=>(
+                <tr key={i}>
+                  <td style={{padding:"3px 10px 3px 0",color:T.textMid,textAlign:"right",fontSize:9,whiteSpace:"nowrap",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis"}} title={inter?.full_names?.[i]}>{inter?.labels?.[i]}</td>
+                  {row.map((v,j)=>(
+                    <td key={j} style={{padding:2}}>
+                      <div style={{width:44,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.55?"#fff":T.textMid,fontSize:9}} title={`${inter?.full_names?.[i]} × ${inter?.full_names?.[j]}`}>
+                        {Number(v).toFixed(2)}
+                      </div>
+                    </td>
                   ))}
-                </tr></thead>
-                <tbody>
-                  {(corrProj.matrix||[]).map((row,i)=>(
-                    <tr key={i}>
-                      <td style={{padding:"3px 12px 3px 0",color:T.textMid,textAlign:"right",fontSize:10,whiteSpace:"nowrap"}}>{corrProj.labels?.[i]}</td>
-                      {row.map((v,j)=>(
-                        <td key={j} style={{padding:2}}>
-                          <div style={{width:50,height:30,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.55?"#fff":T.textMid,fontSize:10}}>
-                            {Number(v).toFixed(2)}
-                          </div>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   );
@@ -865,7 +826,7 @@ function App() {
     "add-project": <AddProject onProjectAdded={()=>setPv(v=>v+1)}/>,
     "risk-model":  <RiskModel key={pv}/>,
     "financial-models": <FinancialModels key={pv}/>,
-    "correlation": <CorrelationMatrix/>,
+    "correlation": <CorrelationMatrix key={pv}/>,
     "naic":        <NaicRBC key={pv}/>,
     "data-feeds":  <DataFeeds/>,
     "review":      <HumanReview/>,

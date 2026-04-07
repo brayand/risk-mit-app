@@ -447,55 +447,76 @@ def get_correlation():
     }
 
 
-@app.get("/api/risk/correlation/project/{project_id}")
-def get_project_correlation(project_id: str):
-    p = next((x for x in _projects if x["id"] == project_id), None)
-    if not p:
-        raise HTTPException(404, "Project not found")
+@app.get("/api/risk/correlation/between-projects")
+def get_between_projects_correlation():
+    """
+    N×N matrix of implied correlations between portfolio projects.
+    Built from aligned 8-factor risk score profiles (centered cosine / correlation),
+    with bonuses for same technology type and same state (shared exposure channels).
+    """
+    if not _projects:
+        return {
+            "project_ids": [],
+            "labels": [],
+            "full_names": [],
+            "matrix": [],
+            "count": 0,
+            "method": "",
+        }
 
     engine = get_engine()
-    analysis = engine.analyze_project(p)
-    scores = analysis.get("scores", {})
+    score_vecs = []
+    for p in _projects:
+        s = engine.score_project(
+            technology=p["type"],
+            state=p["state"],
+            capex=p["capex"],
+            mw=p["mw"],
+            status=p["status"],
+            offtake=p["offtake"],
+        )
+        score_vecs.append([float(s[k]) for k in FACTOR_KEYS])
 
-    type_factor_map = {
-        "Geothermal": "physical_risk",
-        "Nuclear SMR": "regulatory_risk",
-        "Battery Storage": "operational_risk",
-    }
-    anchor_factor = type_factor_map.get(p["type"], "physical_risk")
-    anchor_idx = FACTOR_KEYS.index(anchor_factor)
+    n = len(_projects)
 
-    avg_score = sum(float(scores.get(k, 50.0)) for k in FACTOR_KEYS) / len(FACTOR_KEYS)
-    # Scale correlation concentration by project-specific score level.
-    # Higher scores increase inter-factor dependency slightly.
-    adj = max(-0.05, min(0.05, (avg_score - 50.0) / 1000.0))
+    def pair_corr(i: int, j: int) -> float:
+        if i == j:
+            return 1.0
+        vi, vj = score_vecs[i], score_vecs[j]
+        mi = sum(vi) / len(vi)
+        mj = sum(vj) / len(vj)
+        ci = [a - mi for a in vi]
+        cj = [b - mj for b in vj]
+        dot = sum(a * b for a, b in zip(ci, cj))
+        ni = math.sqrt(sum(a * a for a in ci)) or 1e-9
+        nj = math.sqrt(sum(b * b for b in cj)) or 1e-9
+        r = dot / (ni * nj)
+        r = max(-1.0, min(1.0, r))
+        base = 0.42 + 0.48 * r
+        pi, pj = _projects[i], _projects[j]
+        if pi["type"] == pj["type"]:
+            base += 0.08
+        if pi["state"] == pj["state"]:
+            base += 0.14
+        return round(max(0.05, min(0.99, base)), 3)
 
-    matrix = []
-    for i, row in enumerate(CORR):
-        out_row = []
-        for j, base_val in enumerate(row):
-            if i == j:
-                out_row.append(1.0)
-                continue
-            v = float(base_val) + adj
-            if i == anchor_idx or j == anchor_idx:
-                v += 0.04
-            v = max(0.05, min(0.99, v))
-            out_row.append(round(v, 3))
-        matrix.append(out_row)
+    matrix = [[pair_corr(i, j) for j in range(n)] for i in range(n)]
 
-    labels = [k.replace("_", " ").title() for k in FACTOR_KEYS]
+    def short_label(name: str) -> str:
+        parts = (name or "").split()
+        s = " ".join(parts[:3]) if parts else "?"
+        return s if len(s) <= 28 else s[:25] + "…"
+
     return {
-        "project_id": p["id"],
-        "project_name": p["name"],
-        "project_type": p["type"],
-        "project_state": p["state"],
-        "anchor_factor": anchor_factor,
-        "score_adjustment": round(adj, 4),
-        "labels": labels,
-        "keys": FACTOR_KEYS,
+        "project_ids": [p["id"] for p in _projects],
+        "labels": [short_label(p["name"]) for p in _projects],
+        "full_names": [p["name"] for p in _projects],
         "matrix": matrix,
-        "weights": [RISK_WEIGHTS[k] for k in FACTOR_KEYS],
+        "count": n,
+        "method": (
+            "Factor-profile similarity: centered correlation of eight risk factor scores, "
+            "plus small bonuses for shared technology type and state."
+        ),
     }
 
 
