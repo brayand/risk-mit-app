@@ -154,15 +154,16 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
       items: [
         {id:"dashboard",   label:"Portfolio Overview", icon:"⬡"},
         {id:"risk-model",  label:"Risk Register",      icon:"◈"},
+        {id:"financial-models", label:"Project Details", icon:"$"},
       ],
     },
     {
       category: "Analysis",
       items: [
-        {id:"financial-models", label:"Project Details",    icon:"$"},
         {id:"correlation",      label:"Correlations",       icon:"⊞"},
         {id:"naic",             label:"Insurance Analysis", icon:"◉"},
         {id:"scenario-analysis",label:"Scenario Analysis",  icon:"◬"},
+        {id:"optimized-portfolio",label:"Optimized Portfolio",icon:"◎"},
       ],
     },
     {
@@ -175,8 +176,8 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
   return (
     <aside style={{width:218,minHeight:"100vh",background:"#050810",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",fontFamily:T.mono,position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
       <div style={{padding:"26px 22px 18px",borderBottom:`1px solid ${T.border}`}}>
-        <div style={{fontSize:9,letterSpacing:4,color:T.textDim,marginBottom:5}}>MERIDIAN</div>
-        <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:T.serif,lineHeight:1.2}}>Clean Energy<br/>Risk Lab</div>
+        <div style={{fontSize:9,letterSpacing:2,color:T.textDim,marginBottom:5}}>TOOLS TO MEASURE AND CONTROL RISK</div>
+        <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:T.serif,lineHeight:1.2}}>Risk Mitigation<br/>Platform</div>
         <div style={{marginTop:8,fontSize:9,color:"#1d2c48",letterSpacing:2}}>NAIC RBC · U.S. ONLY</div>
       </div>
       <nav style={{flex:1,padding:"14px 10px"}}>
@@ -446,6 +447,7 @@ function AddProject({onProjectAdded}) {
   const [form,setForm] = useState({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   const [submitting,setSubmitting] = useState(false);
   const [done,setDone] = useState(null);
+  const [dataRoomFiles,setDataRoomFiles] = useState([]);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const STATES = ["AK","AL","AR","AZ","CA","CO","CT","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"];
   const submit = async () => {
@@ -493,6 +495,28 @@ function AddProject({onProjectAdded}) {
               {submitting?"ADDING...":"ADD TO PORTFOLIO →"}
             </button>
           </div>
+        </div>
+      </Card>
+      <Card style={{maxWidth:680,marginTop:14}}>
+        <Label>Data Room Upload (Placeholder)</Label>
+        <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:12,lineHeight:1.6}}>
+          Upload diligence files (term sheets, EPC contracts, permits, financial model, and insurance docs). A future AI Agent will parse these files and pre-fill project fields, flag risks, and draft review notes.
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
+          <input
+            type="file"
+            multiple
+            onChange={(e)=>setDataRoomFiles(Array.from(e.target.files||[]))}
+            style={{fontSize:11,color:T.textDim,fontFamily:T.mono}}
+          />
+          <button disabled style={{padding:"9px 14px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.textDim,fontSize:11,fontFamily:T.mono,cursor:"not-allowed"}}>
+            PARSE WITH AI AGENT (COMING SOON)
+          </button>
+        </div>
+        <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>
+          {dataRoomFiles.length===0
+            ? "No files selected yet."
+            : `${dataRoomFiles.length} file(s) selected for future parsing.`}
         </div>
       </Card>
     </div>
@@ -1079,6 +1103,115 @@ function ScenarioAnalysis() {
   );
 }
 
+// ─── OPTIMIZED PORTFOLIO ──────────────────────────────────────────────────────
+function OptimizedPortfolio() {
+  const {data:portfolio,loading} = useApi("/api/risk/portfolio");
+  const projects = portfolio?.projects || [];
+  const scored = projects.map((p)=>({
+    name: p.project_name,
+    type: p.project_type,
+    state: p.state,
+    score: p.scores?.composite ?? 0,
+    eal: p.losses?.eal ?? 0,
+    var99: p.losses?.var_99 ?? 0,
+    riskUsd: Math.max((p.losses?.var_99 ?? 0) - (p.losses?.eal ?? 0), 0),
+    returnProxy: Math.max(0, 100 - (p.scores?.composite ?? 0)),
+  }));
+  const ranked = [...scored].sort((a,b)=>(a.score - b.score) || (a.eal - b.eal));
+  const selected = ranked.slice(0, Math.min(5, ranked.length));
+  const totalEal = selected.reduce((s,p)=>s+p.eal,0);
+  const totalVar = selected.reduce((s,p)=>s+p.var99,0);
+  const avgScore = selected.length ? selected.reduce((s,p)=>s+p.score,0) / selected.length : null;
+  const baseAvgScore = scored.length ? scored.reduce((s,p)=>s+p.score,0) / scored.length : null;
+  const improvement = (baseAvgScore!=null && avgScore!=null && baseAvgScore>0) ? ((baseAvgScore-avgScore)/baseAvgScore)*100 : null;
+  const frontierPts = [...scored].sort((a,b)=>a.riskUsd-b.riskUsd);
+  let bestRet = -Infinity;
+  const efficientPts = frontierPts.filter((pt)=>{
+    if (pt.returnProxy > bestRet) { bestRet = pt.returnProxy; return true; }
+    return false;
+  });
+  const minRisk = frontierPts.length ? Math.min(...frontierPts.map((p)=>p.riskUsd)) : 0;
+  const maxRisk = frontierPts.length ? Math.max(...frontierPts.map((p)=>p.riskUsd)) : 1;
+  const minRet = frontierPts.length ? Math.min(...frontierPts.map((p)=>p.returnProxy)) : 0;
+  const maxRet = frontierPts.length ? Math.max(...frontierPts.map((p)=>p.returnProxy)) : 100;
+  const sx = (v)=>70 + ((v-minRisk)/Math.max(maxRisk-minRisk,1e-9))*660;
+  const sy = (v)=>250 - ((v-minRet)/Math.max(maxRet-minRet,1e-9))*210;
+  const efPath = efficientPts.map((p,idx)=>`${idx===0?"M":"L"} ${sx(p.riskUsd).toFixed(1)} ${sy(p.returnProxy).toFixed(1)}`).join(" ");
+
+  return (
+    <div>
+      <div style={{marginBottom:28}}>
+        <Label>Analysis</Label>
+        <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Optimized Portfolio</h1>
+        <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Heuristic low-risk selection from current registered projects</p>
+      </div>
+      <PageDescription>
+        This view creates a first-pass optimized subset by prioritizing lower composite risk and lower expected losses. It is intended as a decision-support shortlist before running full underwriting judgement.
+      </PageDescription>
+      {loading ? <Spinner/> : <>
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <KPI label="Selected Projects" value={selected.length} color="#4ecdc4" sourceKey="portfolio_calc"/>
+          <KPI label="Avg Composite Risk" value={avgScore==null ? "—" : fmtN(avgScore,1)} color={riskColor(avgScore||0)} sourceKey="risk_engine"/>
+          <KPI label="Total EAL" value={fmtM(totalEal)} color="#f0a040" sourceKey="risk_engine"/>
+          <KPI label="Total VaR 99%" value={fmtM(totalVar)} color="#e85d5d" sourceKey="risk_engine"/>
+        </div>
+        <Card style={{marginBottom:14}}>
+          <Label>Efficient Frontier (Risk vs Resilience)</Label>
+          <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:10}}>
+            X-axis: risk as +/- dollar band (VaR99 - EAL) · Y-axis: resilience proxy (100 - composite risk).
+          </div>
+          {frontierPts.length===0 ? <Spinner/> : (
+            <svg viewBox="0 0 780 290" style={{width:"100%",height:290,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+              <line x1="70" y1="250" x2="730" y2="250" stroke={T.borderHi} />
+              <line x1="70" y1="30" x2="70" y2="250" stroke={T.borderHi} />
+              <text x="730" y="270" fill={T.textDim} fontSize="10" textAnchor="end">Risk (+/- USD)</text>
+              <text x="20" y="24" fill={T.textDim} fontSize="10">Resilience</text>
+              <text x="70" y="270" fill={T.textDim} fontSize="9">{`+/- ${fmtM(minRisk)}`}</text>
+              <text x="730" y="270" fill={T.textDim} fontSize="9" textAnchor="end">{`+/- ${fmtM(maxRisk)}`}</text>
+              <text x="58" y="250" fill={T.textDim} fontSize="9" textAnchor="end">{fmtN(minRet,1)}</text>
+              <text x="58" y="40" fill={T.textDim} fontSize="9" textAnchor="end">{fmtN(maxRet,1)}</text>
+              {efPath && <path d={efPath} fill="none" stroke="#4ecdc4" strokeWidth="2.5" />}
+              {frontierPts.map((p)=>(
+                <g key={`${p.name}-${p.state}`}>
+                  <circle cx={sx(p.riskUsd)} cy={sy(p.returnProxy)} r="5" fill={typeColor(p.type)} opacity="0.95" />
+                  <title>{`${p.name}: risk +/- ${fmtM(p.riskUsd)}, resilience ${fmtN(p.returnProxy,1)}`}</title>
+                </g>
+              ))}
+            </svg>
+          )}
+        </Card>
+        <Card style={{marginBottom:14}}>
+          <Label>Optimization Summary</Label>
+          <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.7}}>
+            Baseline portfolio average risk: <span style={{color:T.text}}>{baseAvgScore==null ? "—" : fmtN(baseAvgScore,1)}</span>{" · "}
+            optimized subset average risk: <span style={{color:T.text}}>{avgScore==null ? "—" : fmtN(avgScore,1)}</span>{" · "}
+            estimated improvement: <span style={{color:improvement!=null && improvement>0 ? "#4caf82" : "#f0a040"}}>{improvement==null ? "—" : `${fmtN(improvement,1)}%`}</span>
+          </div>
+        </Card>
+        <Card>
+          <Label>Recommended Project Mix</Label>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Project","Type","St.","Composite Risk","EAL","VaR 99%","Priority"].map(h=><Th key={h}>{h}</Th>)}</tr></thead>
+            <tbody>
+              {selected.map((p,i)=>(
+                <tr key={`${p.name}-${i}`}>
+                  <Td><span style={{color:T.text,fontWeight:500}}>{p.name}</span></Td>
+                  <Td><span style={{color:typeColor(p.type)}}>{typeIcon(p.type)} {p.type}</span></Td>
+                  <Td mono>{p.state}</Td>
+                  <Td mono color={riskColor(p.score)} sourceKey="risk_engine">{fmtN(p.score,1)}</Td>
+                  <Td mono color="#f0a040" sourceKey="risk_engine">{fmtM(p.eal)}</Td>
+                  <Td mono color="#e85d5d" sourceKey="risk_engine">{fmtM(p.var99)}</Td>
+                  <Td><Tag color={i<2 ? "#4caf82" : i<4 ? "#f0a040" : "#a78bfa"}>{i<2 ? "Core" : i<4 ? "Balanced" : "Satellite"}</Tag></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </>}
+    </div>
+  );
+}
+
 // ─── DATA FEEDS ───────────────────────────────────────────────────────────────
 function DataFeeds() {
   const {data:nrel}    = useApi("/api/data/nrel-atb");
@@ -1308,6 +1441,7 @@ function App() {
     "correlation": <CorrelationMatrix key={pv}/>,
     "naic":        <NaicRBC key={pv}/>,
     "scenario-analysis": <ScenarioAnalysis key={pv}/>,
+    "optimized-portfolio": <OptimizedPortfolio key={pv}/>,
     "data-feeds":  <DataFeeds/>,
     "review":      <HumanReview/>,
     "export":      <ExportOutputs/>,
