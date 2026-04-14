@@ -162,6 +162,7 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
         {id:"financial-models", label:"Project Details",    icon:"$"},
         {id:"correlation",      label:"Correlations",       icon:"⊞"},
         {id:"naic",             label:"Insurance Analysis", icon:"◉"},
+        {id:"scenario-analysis",label:"Scenario Analysis",  icon:"◬"},
       ],
     },
     {
@@ -1021,6 +1022,63 @@ function NaicRBC() {
   );
 }
 
+// ─── SCENARIO ANALYSIS ────────────────────────────────────────────────────────
+function ScenarioAnalysis() {
+  const {data:naic,loading} = useApi("/api/naic/summary");
+  const scenarios = [
+    {name:"Base Case", ealFactor:1.00, varFactor:1.00, capFactor:1.00, note:"Current modeled portfolio profile."},
+    {name:"Mild Stress", ealFactor:1.12, varFactor:1.18, capFactor:1.10, note:"Moderate claims escalation and spread widening."},
+    {name:"Severe Stress", ealFactor:1.30, varFactor:1.42, capFactor:1.25, note:"Tail-risk concentration with adverse event clustering."},
+  ];
+  const rows = scenarios.map((s)=>{
+    const eal = (naic?.portfolio_eal ?? 0) * s.ealFactor;
+    const var99 = (naic?.portfolio_var99_net ?? 0) * s.varFactor;
+    const capital = (naic?.portfolio_rbc_net ?? 0) * s.capFactor;
+    const coverage = capital > 0 ? var99 / capital : null;
+    return {...s,eal,var99,capital,coverage};
+  });
+  return (
+    <div>
+      <div style={{marginBottom:28}}>
+        <Label>Analysis</Label>
+        <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Scenario Analysis</h1>
+        <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Stress-tested view of loss and capital adequacy across portfolio scenarios</p>
+      </div>
+      <PageDescription>
+        This section converts baseline portfolio outputs into stress scenarios so underwriting teams can compare expected loss, tail risk, and required capital under adverse conditions.
+      </PageDescription>
+      {loading ? <Spinner/> : <>
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <KPI label="Baseline EAL" value={fmtM(naic?.portfolio_eal)} color="#f0a040" sourceKey="risk_engine"/>
+          <KPI label="Baseline VaR 99%" value={fmtM(naic?.portfolio_var99_net)} color="#e85d5d" sourceKey="risk_engine"/>
+          <KPI label="Baseline Capital" value={fmtM(naic?.portfolio_rbc_net)} color="#a78bfa" sourceKey="naic_calc"/>
+          <KPI label="Divers. Benefit" value={`${naic?.diversification_pct ?? "—"}%`} color="#4caf82" sourceKey="naic_calc"/>
+        </div>
+        <Card>
+          <Label>Scenario Table</Label>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Scenario","Portfolio EAL","VaR 99% (net)","Required Capital","VaR/Capital","Interpretation"].map(h=><Th key={h}>{h}</Th>)}</tr></thead>
+            <tbody>
+              {rows.map((r)=>(
+                <tr key={r.name}>
+                  <Td><span style={{color:T.text,fontWeight:500}}>{r.name}</span></Td>
+                  <Td mono color="#f0a040" sourceKey="risk_engine">{fmtM(r.eal)}</Td>
+                  <Td mono color="#e85d5d" sourceKey="risk_engine">{fmtM(r.var99)}</Td>
+                  <Td mono color="#a78bfa" sourceKey="naic_calc">{fmtM(r.capital)}</Td>
+                  <Td mono color={r.coverage==null ? T.textDim : r.coverage<=0.85 ? "#4caf82" : r.coverage<=1.0 ? "#f0a040" : "#e85d5d"} sourceKey="naic_calc">
+                    {r.coverage==null ? "—" : `${fmtN(r.coverage,2)}x`}
+                  </Td>
+                  <Td><span style={{color:T.textDim,fontSize:11}}>{r.note}</span></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </>}
+    </div>
+  );
+}
+
 // ─── DATA FEEDS ───────────────────────────────────────────────────────────────
 function DataFeeds() {
   const {data:nrel}    = useApi("/api/data/nrel-atb");
@@ -1249,6 +1307,7 @@ function App() {
     "financial-models": <FinancialModels key={pv}/>,
     "correlation": <CorrelationMatrix key={pv}/>,
     "naic":        <NaicRBC key={pv}/>,
+    "scenario-analysis": <ScenarioAnalysis key={pv}/>,
     "data-feeds":  <DataFeeds/>,
     "review":      <HumanReview/>,
     "export":      <ExportOutputs/>,
