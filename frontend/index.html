@@ -8,7 +8,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    body { margin: 0; background: #070b14; }
+    body { margin: 0; background: #f6f7f9; color: #1b2431; }
   </style>
 </head>
 <body>
@@ -75,13 +75,13 @@ const withVarNum = (v, variance, d=2) => {
   if (variance == null || variance === 0) return base;
   return `${base} +/- ${Number(variance).toFixed(d)}`;
 };
-const riskColor = (s) => s >= 80 ? "#e85d5d" : s >= 60 ? "#f0a040" : "#4caf82";
-const typeColor = (t) => t === "Geothermal" ? "#4ecdc4" : t === "Nuclear SMR" ? "#a78bfa" : "#f59e0b";
+const riskColor = (s) => s >= 80 ? "#c44545" : s >= 60 ? "#b07a24" : "#2f7f5f";
+const typeColor = (t) => t === "Geothermal" ? "#2f7f5f" : t === "Nuclear SMR" ? "#5f6fb2" : "#b07a24";
 const typeIcon  = (t) => t === "Geothermal" ? "⬡" : t === "Nuclear SMR" ? "◎" : "▣";
 const T = {
-  bg:"#070b14", surface:"#0c1220", border:"#16213a", borderHi:"#1e2f50",
-  text:"#dde3f5", textDim:"#3d4f72", textMid:"#7a8fba",
-  mono:"'IBM Plex Mono', monospace", serif:"'Cormorant Garamond', serif",
+  bg:"#f6f7f9", surface:"#ffffff", border:"#d6dbe3", borderHi:"#b8c2d1",
+  text:"#1b2431", textDim:"#5f6b7a", textMid:"#3d4b5d",
+  mono:"'Inter', sans-serif", serif:"'Libre Baskerville', serif",
 };
 
 const SOURCE_INFO = {
@@ -102,10 +102,10 @@ function SourceHint({sourceKey, children}) {
   return (
     <span className="src-wrap" style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6}}>
       <span>{children}</span>
-      <span style={{fontSize:9,color:"#4ecdc4",border:"1px solid #1e3f49",borderRadius:10,padding:"0 5px",lineHeight:"14px"}}>i</span>
-      <span className="src-box" style={{position:"absolute",left:0,top:"110%",zIndex:50,minWidth:250,maxWidth:320,background:"#08101d",border:`1px solid ${T.borderHi}`,borderRadius:6,padding:"8px 10px",opacity:0,pointerEvents:"none",transform:"translateY(4px)",transition:"all 0.12s"}}>
+      <span style={{fontSize:9,color:"#345d9d",border:"1px solid #c8d6ea",borderRadius:10,padding:"0 5px",lineHeight:"14px"}}>i</span>
+      <span className="src-box" style={{position:"absolute",left:0,top:"110%",zIndex:50,minWidth:250,maxWidth:320,background:"#ffffff",border:`1px solid ${T.borderHi}`,borderRadius:6,padding:"8px 10px",opacity:0,pointerEvents:"none",transform:"translateY(4px)",transition:"all 0.12s",boxShadow:"0 8px 24px rgba(18,34,58,0.10)"}}>
         <div style={{fontSize:10,color:T.textMid,fontFamily:T.mono,lineHeight:1.5,marginBottom:8}}>{src.from}</div>
-        <button onClick={onNavigate} style={{fontSize:10,padding:"5px 8px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:4,color:"#4ecdc4",cursor:"pointer",fontFamily:T.mono}}>
+        <button onClick={onNavigate} style={{fontSize:10,padding:"5px 8px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:4,color:"#345d9d",cursor:"pointer",fontFamily:T.mono}}>
           Open {src.sectionLabel}
         </button>
       </span>
@@ -121,16 +121,70 @@ const Tag = ({children,color="#4a5580"}) => <span style={{fontSize:9,padding:"2p
 const Th = ({children}) => <th style={{padding:"8px 10px",color:T.textDim,fontSize:10,textTransform:"uppercase",letterSpacing:1,textAlign:"left",fontWeight:500,fontFamily:T.mono,borderBottom:`1px solid ${T.border}`}}>{children}</th>;
 const Td = ({children,mono,color,sourceKey}) => <td style={{padding:"11px 10px",color:color||T.textMid,fontFamily:mono?T.mono:undefined,borderBottom:`1px solid ${T.bg}`,fontSize:12}}><SourceHint sourceKey={sourceKey}>{children}</SourceHint></td>;
 const PageDescription = ({children}) => (
-  <Card style={{marginBottom:16,padding:"14px 18px",background:"#091325",borderColor:T.borderHi}}>
+  <Card style={{marginBottom:16,padding:"14px 18px",background:"#f2f5f9",borderColor:T.borderHi}}>
     <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.7}}>{children}</div>
   </Card>
 );
+const slugify = (v) => (v || "section").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+const csvEscape = (v) => {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const downloadTextFile = (content, filename, mimeType) => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+const exportSectionExcel = (section) => {
+  const tables = Array.from(document.querySelectorAll("main table"));
+  const lines = [`Section,${csvEscape(section)}`,`Generated At,${csvEscape(new Date().toISOString())}`,""];
+  if (tables.length===0) {
+    lines.push("Info,No tabular data found on current page.");
+  } else {
+    tables.forEach((table, idx) => {
+      lines.push(`Table ${idx+1}`);
+      const rows = Array.from(table.querySelectorAll("tr"));
+      rows.forEach((row) => {
+        const cells = Array.from(row.querySelectorAll("th,td")).map((c)=>csvEscape(c.innerText.trim()));
+        if (cells.length) lines.push(cells.join(","));
+      });
+      lines.push("");
+    });
+  }
+  downloadTextFile(lines.join("\n"), `${slugify(section)}-${Date.now()}.csv`, "text/csv;charset=utf-8");
+};
+const exportSectionPdf = (section) => {
+  const main = document.querySelector("main");
+  if (!main) return;
+  const printable = window.open("", "_blank", "width=1200,height=900");
+  if (!printable) return;
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>${section} PDF</title><style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#111;}
+    h1{margin:0 0 6px 0;font-size:24px;}
+    p{margin:0 0 16px 0;font-size:12px;color:#555;}
+    table{border-collapse:collapse;width:100%;margin:12px 0;}
+    th,td{border:1px solid #bbb;padding:6px 8px;font-size:11px;text-align:left;vertical-align:top;}
+    @media print {.no-print{display:none;}}
+  </style></head><body>
+    <div class="no-print" style="margin-bottom:12px;"><button onclick="window.print()">Print / Save as PDF</button></div>
+    <h1>${section}</h1><p>Generated ${new Date().toLocaleString()}</p>${main.innerHTML}
+  </body></html>`;
+  printable.document.open();
+  printable.document.write(html);
+  printable.document.close();
+};
 const QuickExportButtons = ({section}) => (
   <div style={{display:"flex",gap:8,marginTop:10}}>
-    <button onClick={()=>window.alert(`PDF export queued for ${section}.`)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#4ecdc4",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
+    <button onClick={()=>exportSectionPdf(section)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#4ecdc4",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
       PDF OUTPUT
     </button>
-    <button onClick={()=>window.alert(`Excel export queued for ${section}.`)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#a78bfa",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
+    <button onClick={()=>exportSectionExcel(section)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#a78bfa",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
       EXCEL OUTPUT
     </button>
   </div>
@@ -186,12 +240,20 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
       ],
     },
   ];
+  const flowGroups = [
+    { category:"Inputs", items:["Data Feeds","Add Project","Human Review"] },
+    { category:"Overview", items:["Portfolio Overview","Risk Register","Project Details"] },
+    { category:"Analysis", items:["Correlations","Insurance Analysis","Scenario Analysis","Optimized Portfolio"] },
+    { category:"Outputs", items:["Equity Holders","Insurance Providers","Debt Holders","Export Outputs"] },
+  ];
   return (
-    <aside style={{width:218,minHeight:"100vh",background:"#050810",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",fontFamily:T.mono,position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
+    <aside style={{width:218,minHeight:"100vh",background:"#ffffff",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",fontFamily:T.mono,position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
       <div style={{padding:"26px 22px 18px",borderBottom:`1px solid ${T.border}`}}>
         <div style={{fontSize:9,letterSpacing:2,color:T.textDim,marginBottom:5}}>TOOLS TO MEASURE AND CONTROL RISK</div>
-        <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:T.serif,lineHeight:1.2}}>Risk Mitigation<br/>Platform</div>
-        <div style={{marginTop:8,fontSize:9,color:"#1d2c48",letterSpacing:2}}>NAIC RBC · U.S. ONLY</div>
+        <button onClick={()=>setActive("home")} style={{background:"transparent",border:"none",padding:0,textAlign:"left",cursor:"pointer",lineHeight:1.2}}>
+          <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:T.serif}}>Risk Mitigation<br/>Platform</div>
+        </button>
+        <div style={{marginTop:8,fontSize:9,color:T.textDim,letterSpacing:2}}>NAIC RBC · U.S. ONLY</div>
       </div>
       <nav style={{flex:1,padding:"14px 10px"}}>
         {navGroups.map((group)=>(
@@ -217,6 +279,92 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
         </button>
       </div>
     </aside>
+  );
+}
+
+// ─── HOME ──────────────────────────────────────────────────────────────────────
+function HomePage() {
+  const flow = [
+    { category:"Inputs", color:"#4ecdc4", items:["Data Feeds","Add Project","Human Review"] },
+    { category:"Overview", color:"#a78bfa", items:["Portfolio Overview","Risk Register","Project Details"] },
+    { category:"Analysis", color:"#f0a040", items:["Correlations","Insurance Analysis","Scenario Analysis","Optimized Portfolio"] },
+    { category:"Outputs", color:"#4caf82", items:["Equity Holders","Insurance Providers","Debt Holders","Export Outputs"] },
+  ];
+  return (
+    <div>
+      <div style={{marginBottom:28}}>
+        <Label>Platform Home</Label>
+        <h1 style={{fontSize:38,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Risk Mitigation Platform</h1>
+        <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Clean energy underwriting intelligence from intake to lender/investor/insurer outputs</p>
+      </div>
+      <PageDescription>
+        This platform helps teams evaluate clean-energy project risk using live external data, quantitative modeling, human governance, and stakeholder-ready outputs. Navigate through the workflow below from data intake to decision-ready deliverables.
+      </PageDescription>
+      <Card style={{marginBottom:14}}>
+        <Label>Project Scope</Label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(160px,1fr))",gap:10}}>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:4}}>Technologies</div>
+            <div style={{fontSize:13,color:T.text}}>Battery Storage · Nuclear SMR · Geothermal</div>
+          </div>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:4}}>Risk Engine</div>
+            <div style={{fontSize:13,color:T.text}}>8-factor scoring · Monte Carlo · Correlation modeling</div>
+          </div>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:4}}>Frameworks</div>
+            <div style={{fontSize:13,color:T.text}}>NAIC RBC · Solvency II · Lloyd's RDS · Basel IV · TCFD · IFRS 9</div>
+          </div>
+        </div>
+      </Card>
+      <Card style={{marginBottom:14}}>
+        <Label>Who This Is For</Label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(260px,1fr))",gap:10}}>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:12,color:T.text,fontFamily:T.mono,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Investors</div>
+            <div style={{fontSize:12,color:T.textMid,lineHeight:1.7}}>
+              Compare risk-adjusted opportunities across projects, stress test downside outcomes, and prioritize capital toward assets with stronger expected return resilience.
+            </div>
+          </div>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:12,color:T.text,fontFamily:T.mono,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Project Developers</div>
+            <div style={{fontSize:12,color:T.textMid,lineHeight:1.7}}>
+              Understand how design, permitting, and financing assumptions affect risk scoring and capital implications so projects can be structured for better bankability.
+            </div>
+          </div>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:12,color:T.text,fontFamily:T.mono,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Insurance Providers</div>
+            <div style={{fontSize:12,color:T.textMid,lineHeight:1.7}}>
+              Quantify expected loss, tail risk, and portfolio-level capital needs to support pricing, capacity allocation, and underwriting governance decisions.
+            </div>
+          </div>
+          <div style={{padding:12,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6}}>
+            <div style={{fontSize:12,color:T.text,fontFamily:T.mono,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Foundations</div>
+            <div style={{fontSize:12,color:T.textMid,lineHeight:1.7}}>
+              Evaluate catalytic funding opportunities with transparent risk metrics and scenario views to direct grants or blended finance toward high-impact, de-risked projects.
+            </div>
+          </div>
+        </div>
+      </Card>
+      <Card>
+        <Label>Ordered Process Flow</Label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(180px,1fr))",gap:12,alignItems:"start"}}>
+          {flow.map((step,idx)=>(
+            <div key={step.category} style={{position:"relative"}}>
+              <div style={{padding:12,background:T.bg,border:`1px solid ${step.color}66`,borderRadius:8,minHeight:180}}>
+                <div style={{fontSize:11,color:step.color,fontFamily:T.mono,letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>{step.category}</div>
+                {step.items.map((item)=>(
+                  <div key={item} style={{padding:"7px 8px",marginBottom:6,borderRadius:5,background:"#0b1528",fontSize:11,color:T.textMid,fontFamily:T.mono}}>
+                    {item}
+                  </div>
+                ))}
+              </div>
+              {idx < flow.length-1 && <div style={{position:"absolute",right:-10,top:"44%",color:T.textDim,fontSize:18}}>→</div>}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -1640,7 +1788,7 @@ function ExportOutputs() {
 
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 function App() {
-  const [active,setActive]               = useState("dashboard");
+  const [active,setActive]               = useState("home");
   const [pipelineRunning,setPipeline]    = useState(false);
   const [reviewPending,setReviewPending] = useState(0);
   const [pv,setPv]                       = useState(0);
@@ -1668,6 +1816,7 @@ function App() {
   };
 
   const screens = {
+    "home":        <HomePage/>,
     "dashboard":   <Dashboard key={pv}/>,
     "add-project": <AddProject onProjectAdded={()=>setPv(v=>v+1)}/>,
     "risk-model":  <RiskModel key={pv}/>,
@@ -1687,7 +1836,7 @@ function App() {
   return (
     <div style={{background:T.bg,minHeight:"100vh"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Cormorant+Garamond:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Libre+Baskerville:wght@400;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${T.bg};}
         ::-webkit-scrollbar{width:5px;height:5px;background:${T.bg};}
