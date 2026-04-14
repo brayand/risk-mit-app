@@ -180,13 +180,18 @@ const exportSectionPdf = (section) => {
   printable.document.close();
 };
 const QuickExportButtons = ({section}) => (
-  <div style={{display:"flex",gap:8,marginTop:10}}>
-    <button onClick={()=>exportSectionPdf(section)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#4ecdc4",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
-      PDF OUTPUT
+  <div style={{marginTop:10}}>
+    <div style={{fontSize:10,color:T.textDim,fontFamily:T.mono,letterSpacing:1.6,textTransform:"uppercase",marginBottom:6}}>
+      Output Buttons
+    </div>
+    <div style={{display:"flex",gap:8}}>
+    <button onClick={()=>exportSectionPdf(section)} style={{padding:"7px 12px",background:"#edf6ff",border:"1px solid #b8d3ef",borderRadius:6,color:"#1f4d7d",fontSize:10,fontFamily:T.mono,letterSpacing:1.1,fontWeight:600,cursor:"pointer"}}>
+      ⎙ PDF OUTPUT
     </button>
-    <button onClick={()=>exportSectionExcel(section)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#a78bfa",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
-      EXCEL OUTPUT
+    <button onClick={()=>exportSectionExcel(section)} style={{padding:"7px 12px",background:"#f3f0ff",border:"1px solid #cbc0f3",borderRadius:6,color:"#4d3f8d",fontSize:10,fontFamily:T.mono,letterSpacing:1.1,fontWeight:600,cursor:"pointer"}}>
+      ⬇ EXCEL OUTPUT
     </button>
+    </div>
   </div>
 );
 const SectionVisual = ({title,subtitle,icon,colorA="#eaf0f8",colorB="#f7f9fc"}) => (
@@ -1425,7 +1430,13 @@ function DataFeeds() {
   const {data:nrcE}    = useApi("/api/data/nrc-events");
   const {data:fred}    = useApi("/api/data/fred");
   const [tab,setTab]   = useState("nrel");
-  const tabs = [["nrel","NREL ATB",nrel?.rows?.length],["seismic","USGS Seismic",seismic?.rows?.length],["nrc-r","NRC Reactors",nrcR?.rows?.length],["nrc-e","NRC Events",nrcE?.rows?.length],["fred","FRED Macro",fred?.indicators?.length]];
+  const tabs = [
+    ["nrel","NREL ATB",nrel?.rows?.length],
+    ["seismic","USGS Seismic",seismic?.rows?.length],
+    ["nrc-r","NRC Reactors",nrcR?.rows?.length],
+    ["nrc-e","NRC Events",nrcE?.rows?.length],
+    ["fred","FRED Macro",fred?.indicators?.length]
+  ];
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Live Pipeline Data</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Data Feeds</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>EIA · NREL · NRC · USGS · FRED — all public sources, updated monthly</p></div>
@@ -1434,8 +1445,10 @@ function DataFeeds() {
       </PageDescription>
       <div style={{display:"flex",gap:0,marginBottom:20,background:T.bg,borderRadius:8,border:`1px solid ${T.border}`,width:"fit-content"}}>
         {tabs.map(([id,label,count])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{padding:"9px 20px",border:"none",cursor:"pointer",fontSize:11,fontFamily:T.mono,background:tab===id?T.surface:"transparent",color:tab===id?"#4ecdc4":T.textDim,borderRadius:8}}>
-            {label}{count!=null?<span style={{marginLeft:6,color:T.textDim,fontSize:10}}>({count})</span>:""}
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"9px 20px",border:"none",cursor:"pointer",fontSize:11,fontFamily:T.mono,background:tab===id?T.surface:"transparent",color:tab===id?"#345d9d":T.textDim,borderRadius:8,display:"flex",alignItems:"center",gap:6}}>
+            <span style={{width:8,height:8,borderRadius:"50%",background:(count||0)>0?"#2f7f5f":"#c44545",boxShadow:`0 0 0 0 ${((count||0)>0?"rgba(47,127,95,0.45)":"rgba(196,69,69,0.45)")}`,animation:"statusPulse 1.6s ease-in-out infinite"}}/>
+            <span>{label}</span>
+            {count!=null?<span style={{marginLeft:2,color:T.textDim,fontSize:10}}>({count})</span>:""}
           </button>
         ))}
       </div>
@@ -1936,6 +1949,11 @@ function App() {
         .src-wrap:hover .src-box{opacity:1;pointer-events:auto;transform:translateY(0);}
         @keyframes spin{to{transform:rotate(360deg);}}
         @keyframes pulse{0%,100%{opacity:0.4;}50%{opacity:0.8;}}
+        @keyframes statusPulse{
+          0%{transform:scale(1); box-shadow:0 0 0 0 rgba(52,93,157,0.28);}
+          70%{transform:scale(1.1); box-shadow:0 0 0 8px rgba(52,93,157,0);}
+          100%{transform:scale(1); box-shadow:0 0 0 0 rgba(52,93,157,0);}
+        }
       `}</style>
       <Sidebar active={active} setActive={setActive} reviewPending={reviewPending} pipelineRunning={pipelineRunning} onSync={handleSync}/>
       <main style={{marginLeft:218,padding:"40px 48px",maxWidth:1260}}>
