@@ -354,7 +354,7 @@ function HomePage() {
               <div style={{padding:12,background:T.bg,border:`1px solid ${step.color}66`,borderRadius:8,minHeight:180}}>
                 <div style={{fontSize:11,color:step.color,fontFamily:T.mono,letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>{step.category}</div>
                 {step.items.map((item)=>(
-                  <div key={item} style={{padding:"7px 8px",marginBottom:6,borderRadius:5,background:"#0b1528",fontSize:11,color:T.textMid,fontFamily:T.mono}}>
+                  <div key={item} style={{padding:"7px 8px",marginBottom:6,borderRadius:5,background:"#ffffff",border:`1px solid ${T.border}`,fontSize:11,color:T.textMid,fontFamily:T.mono}}>
                     {item}
                   </div>
                 ))}
