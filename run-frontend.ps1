@@ -4,10 +4,8 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $frontendPath = Join-Path $root "frontend"
 $pidFile = Join-Path $root ".frontend-dev.pid"
 $frontendCmd = @"
-corepack enable
-corepack prepare pnpm@latest --activate
-if (!(Test-Path "node_modules")) { pnpm install }
-pnpm dev
+if (!(Test-Path "node_modules")) { npm install }
+npm run dev
 "@
 
 $frontendProc = Start-Process powershell -WorkingDirectory $frontendPath -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $frontendCmd -PassThru

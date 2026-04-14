@@ -85,8 +85,8 @@ const T = {
 };
 
 const SOURCE_INFO = {
-  portfolio_calc: { from: "Derived from project register and risk engine outputs.", section: "risk-model", sectionLabel: "Risk Model" },
-  risk_engine: { from: "Computed by risk engine (factor scores + Monte Carlo losses).", section: "risk-model", sectionLabel: "Risk Model" },
+  portfolio_calc: { from: "Derived from project register and risk engine outputs.", section: "risk-model", sectionLabel: "Risk Register" },
+  risk_engine: { from: "Computed by risk engine (factor scores + Monte Carlo losses).", section: "risk-model", sectionLabel: "Risk Register" },
   naic_calc: { from: "Calculated in NAIC RBC workflow from modeled losses/exposures.", section: "naic", sectionLabel: "NAIC RBC" },
   financial_model: { from: "Calculated from project financial assumptions and 10-year projection logic.", section: "financial-models", sectionLabel: "Financial Models" },
   correlation_calc: { from: "Computed from factor correlation assumptions and project-profile similarity.", section: "correlation", sectionLabel: "Correlations" },
@@ -143,10 +143,10 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
   const nav = [
     {id:"dashboard",   label:"Portfolio Overview", icon:"⬡"},
     {id:"add-project", label:"Add Project",         icon:"+"},
-    {id:"risk-model",  label:"Risk Model",          icon:"◈"},
+    {id:"risk-model",  label:"Risk Register",       icon:"◈"},
     {id:"financial-models", label:"Project Details", icon:"$"},
     {id:"correlation", label:"Correlations",        icon:"⊞"},
-    {id:"naic",        label:"Insurance",           icon:"◉"},
+    {id:"naic",        label:"Insurance Analysis",  icon:"◉"},
     {id:"data-feeds",  label:"Data Feeds",          icon:"⟁"},
     {id:"review",      label:"Human Review",        icon:"✦", badge:reviewPending},
     {id:"export",      label:"Export Outputs",      icon:"↗"},
@@ -481,7 +481,7 @@ function RiskModel() {
   const pr = projects[sel];
   return (
     <div>
-      <div style={{marginBottom:28}}><Label>Methodology</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Risk Model</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>8-factor scoring · Monte Carlo · t-Copula · NAIC RBC · Live DB adjustments</p></div>
+      <div style={{marginBottom:28}}><Label>Methodology</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Risk Register</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>8-factor scoring · Monte Carlo · t-Copula · NAIC RBC · Live DB adjustments</p></div>
       <PageDescription>
         This view explains how each project score is produced and translated into loss distributions. Factor scores drive the composite risk rating, Monte Carlo outputs estimate downside scenarios, and NAIC RBC components convert modeled risk into required regulatory capital.
       </PageDescription>
@@ -947,7 +947,7 @@ function NaicRBC() {
   return (
     <div>
       <div style={{marginBottom:28}}>
-        <Label>Insurance</Label>
+        <Label>Insurance Analysis</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Insurance Analysis</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>{fw.subtitle}</p>
         <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
