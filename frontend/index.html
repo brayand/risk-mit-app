@@ -273,7 +273,7 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
             {group.items.map((item) => {
               const on = active === item.id;
               return (
-                <button key={item.id} onClick={()=>setActive(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 12px",borderRadius:6,border:"none",cursor:"pointer",background:on?"#0d1526":"transparent",borderLeft:`2px solid ${on?"#4ecdc4":"transparent"}`,color:on?T.text:T.textDim,fontSize:12,marginBottom:1,transition:"all 0.12s",textAlign:"left"}}>
+                <button key={item.id} onClick={()=>setActive(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 12px",borderRadius:6,border:"none",cursor:"pointer",background:on?"#eef3fb":"transparent",borderLeft:`2px solid ${on?"#345d9d":"transparent"}`,color:on?"#1f3f73":T.textDim,fontSize:12,marginBottom:1,transition:"all 0.12s",textAlign:"left"}}>
                   <span style={{fontSize:13,width:16,textAlign:"center"}}>{item.icon}</span>
                   {item.label}
                   {item.badge>0 && <span style={{marginLeft:"auto",background:"#e85d5d",color:"#fff",fontSize:9,borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
