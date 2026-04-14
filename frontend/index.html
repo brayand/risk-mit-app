@@ -140,16 +140,36 @@ function KPI({label,value,sub,color,loading,sourceKey}) {
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────────────────
 function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
-  const nav = [
-    {id:"dashboard",   label:"Portfolio Overview", icon:"⬡"},
-    {id:"add-project", label:"Add Project",         icon:"+"},
-    {id:"risk-model",  label:"Risk Register",       icon:"◈"},
-    {id:"financial-models", label:"Project Details", icon:"$"},
-    {id:"correlation", label:"Correlations",        icon:"⊞"},
-    {id:"naic",        label:"Insurance Analysis",  icon:"◉"},
-    {id:"data-feeds",  label:"Data Feeds",          icon:"⟁"},
-    {id:"review",      label:"Human Review",        icon:"✦", badge:reviewPending},
-    {id:"export",      label:"Export Outputs",      icon:"↗"},
+  const navGroups = [
+    {
+      category: "Inputs",
+      items: [
+        {id:"data-feeds",  label:"Data Feeds",        icon:"⟁"},
+        {id:"add-project", label:"Add Project",       icon:"+"},
+        {id:"review",      label:"Human Review",      icon:"✦", badge:reviewPending},
+      ],
+    },
+    {
+      category: "Overview",
+      items: [
+        {id:"dashboard",   label:"Portfolio Overview", icon:"⬡"},
+        {id:"risk-model",  label:"Risk Register",      icon:"◈"},
+      ],
+    },
+    {
+      category: "Analysis",
+      items: [
+        {id:"financial-models", label:"Project Details",    icon:"$"},
+        {id:"correlation",      label:"Correlations",       icon:"⊞"},
+        {id:"naic",             label:"Insurance Analysis", icon:"◉"},
+      ],
+    },
+    {
+      category: "Outputs",
+      items: [
+        {id:"export",      label:"Export Outputs",     icon:"↗"},
+      ],
+    },
   ];
   return (
     <aside style={{width:218,minHeight:"100vh",background:"#050810",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",fontFamily:T.mono,position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
@@ -159,16 +179,21 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
         <div style={{marginTop:8,fontSize:9,color:"#1d2c48",letterSpacing:2}}>NAIC RBC · U.S. ONLY</div>
       </div>
       <nav style={{flex:1,padding:"14px 10px"}}>
-        {nav.map(item => {
-          const on = active === item.id;
-          return (
-            <button key={item.id} onClick={()=>setActive(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 12px",borderRadius:6,border:"none",cursor:"pointer",background:on?"#0d1526":"transparent",borderLeft:`2px solid ${on?"#4ecdc4":"transparent"}`,color:on?T.text:T.textDim,fontSize:12,marginBottom:1,transition:"all 0.12s",textAlign:"left"}}>
-              <span style={{fontSize:13,width:16,textAlign:"center"}}>{item.icon}</span>
-              {item.label}
-              {item.badge>0 && <span style={{marginLeft:"auto",background:"#e85d5d",color:"#fff",fontSize:9,borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
-            </button>
-          );
-        })}
+        {navGroups.map((group)=>(
+          <div key={group.category} style={{marginBottom:10}}>
+            <div style={{fontSize:9,color:T.textDim,letterSpacing:1.8,textTransform:"uppercase",padding:"8px 12px 6px"}}>{group.category}</div>
+            {group.items.map((item) => {
+              const on = active === item.id;
+              return (
+                <button key={item.id} onClick={()=>setActive(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 12px",borderRadius:6,border:"none",cursor:"pointer",background:on?"#0d1526":"transparent",borderLeft:`2px solid ${on?"#4ecdc4":"transparent"}`,color:on?T.text:T.textDim,fontSize:12,marginBottom:1,transition:"all 0.12s",textAlign:"left"}}>
+                  <span style={{fontSize:13,width:16,textAlign:"center"}}>{item.icon}</span>
+                  {item.label}
+                  {item.badge>0 && <span style={{marginLeft:"auto",background:"#e85d5d",color:"#fff",fontSize:9,borderRadius:10,padding:"1px 6px",fontWeight:700}}>{item.badge}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
       <div style={{padding:"14px 18px",borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>
         <div style={{marginBottom:6}}>EIA · NREL · NRC · USGS · FRED</div>
