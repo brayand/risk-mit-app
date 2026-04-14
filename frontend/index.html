@@ -125,6 +125,16 @@ const PageDescription = ({children}) => (
     <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.7}}>{children}</div>
   </Card>
 );
+const QuickExportButtons = ({section}) => (
+  <div style={{display:"flex",gap:8,marginTop:10}}>
+    <button onClick={()=>window.alert(`PDF export queued for ${section}.`)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#4ecdc4",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
+      PDF OUTPUT
+    </button>
+    <button onClick={()=>window.alert(`Excel export queued for ${section}.`)} style={{padding:"6px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:"#a78bfa",fontSize:10,fontFamily:T.mono,letterSpacing:1,cursor:"pointer"}}>
+      EXCEL OUTPUT
+    </button>
+  </div>
+);
 
 function KPI({label,value,sub,color,loading,sourceKey}) {
   return (
@@ -312,6 +322,7 @@ function Dashboard() {
         <Label>Portfolio Overview</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0 6px",letterSpacing:-1}}>Risk Dashboard</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Storage · Nuclear SMR · Geothermal — NAIC RBC — Live Pipeline Data</p>
+        <QuickExportButtons section="Portfolio Overview" />
       </div>
       <PageDescription>
         This dashboard summarizes portfolio-level exposure and loss outcomes using live project records plus synced external data. It combines project counts, capital at risk, expected annual loss, and NAIC capital requirements so you can see where risk is concentrated before drilling into model details.
@@ -534,7 +545,7 @@ function RiskModel() {
   const pr = projects[sel];
   return (
     <div>
-      <div style={{marginBottom:28}}><Label>Methodology</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Risk Register</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>8-factor scoring · Monte Carlo · t-Copula · NAIC RBC · Live DB adjustments</p></div>
+      <div style={{marginBottom:28}}><Label>Methodology</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Risk Register</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>8-factor scoring · Monte Carlo · t-Copula · NAIC RBC · Live DB adjustments</p><QuickExportButtons section="Risk Register" /></div>
       <PageDescription>
         This view explains how each project score is produced and translated into loss distributions. Factor scores drive the composite risk rating, Monte Carlo outputs estimate downside scenarios, and NAIC RBC components convert modeled risk into required regulatory capital.
       </PageDescription>
@@ -679,6 +690,7 @@ function FinancialModels() {
         <Label>Project Finance</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Project Details</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>10-year deterministic annual projections by project</p>
+        <QuickExportButtons section="Project Details" />
       </div>
       <PageDescription>
         This page shows full 10-year annual financial projections for each project, including revenue, opex, debt service, net cash flow, and DSCR. Use this to validate base-case underwriting economics alongside modeled risk outcomes.
@@ -844,7 +856,7 @@ function CorrelationMatrix() {
 
   return (
     <div>
-      <div style={{marginBottom:28}}><Label>Dependency Structure</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Correlation Matrix</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Pearson correlations · t-Copula (ν=4) · used in Monte Carlo simulation</p></div>
+      <div style={{marginBottom:28}}><Label>Dependency Structure</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Correlation Matrix</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Pearson correlations · t-Copula (ν=4) · used in Monte Carlo simulation</p><QuickExportButtons section="Correlations" /></div>
       <PageDescription>
         The matrix shows how project risk factors move together instead of independently. These dependency assumptions are applied in simulation to produce portfolio-level VaR and TVaR that reflect diversification and concentration effects.
       </PageDescription>
@@ -1003,6 +1015,7 @@ function NaicRBC() {
         <Label>Insurance Analysis</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Insurance Analysis</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>{fw.subtitle}</p>
+        <QuickExportButtons section="Insurance Analysis" />
         <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
           {Object.keys(frameworkProfiles).map((name)=>(
             <button key={name} onClick={()=>setFramework(name)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${framework===name?"#4ecdc4":T.border}`,background:framework===name?"#072020":"transparent",color:framework===name?"#4ecdc4":T.textDim,fontSize:11,cursor:"pointer",fontFamily:T.mono}}>
@@ -1070,6 +1083,7 @@ function ScenarioAnalysis() {
         <Label>Analysis</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Scenario Analysis</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Stress-tested view of loss and capital adequacy across portfolio scenarios</p>
+        <QuickExportButtons section="Scenario Analysis" />
       </div>
       <PageDescription>
         This section converts baseline portfolio outputs into stress scenarios so underwriting teams can compare expected loss, tail risk, and required capital under adverse conditions.
@@ -1147,6 +1161,7 @@ function OptimizedPortfolio() {
         <Label>Analysis</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Optimized Portfolio</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Heuristic low-risk selection from current registered projects</p>
+        <QuickExportButtons section="Optimized Portfolio" />
       </div>
       <PageDescription>
         This view creates a first-pass optimized subset by prioritizing lower composite risk and lower expected losses. It is intended as a decision-support shortlist before running full underwriting judgement.
@@ -1380,6 +1395,7 @@ function DebtHolders() {
         <Label>Outputs</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Debt Holders</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Lender-focused credit view across debt service, leverage, and covenant health</p>
+        <QuickExportButtons section="Debt Holders" />
       </div>
       <PageDescription>
         This page summarizes debt holder risk for each project using debt principal, annual debt service, DSCR, leverage, and covenant-style status to support credit committee and lender monitoring workflows.
@@ -1451,6 +1467,7 @@ function EquityHolders() {
         <Label>Outputs</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Equity Holders</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Sponsor and investor lens on capital at risk and upside capture</p>
+        <QuickExportButtons section="Equity Holders" />
       </div>
       <PageDescription>
         This page highlights equity-focused economics including committed equity, residual cash after debt service, projected IRR, and indicative return quality by project.
@@ -1516,6 +1533,7 @@ function InsuranceProviders() {
         <Label>Outputs</Label>
         <h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Insurance Providers</h1>
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Carrier-facing loss, tail, and pricing view by project</p>
+        <QuickExportButtons section="Insurance Providers" />
       </div>
       <PageDescription>
         This page provides insurer-relevant indicators including expected loss, tail risk, implied premium signal, and loss ratio to support pricing and capacity decisions.
@@ -1572,7 +1590,7 @@ function ExportOutputs() {
   const reportTypes = ["Actuarial Reserve Memo","Risk Register Report","NAIC RBC Filing Package","Executive Summary","Correlation Analysis","Project Deep Dive"];
   return (
     <div>
-      <div style={{marginBottom:28}}><Label>Report Generation</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Export Outputs</h1></div>
+      <div style={{marginBottom:28}}><Label>Report Generation</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Export Outputs</h1><QuickExportButtons section="Export Outputs" /></div>
       <PageDescription>
         Export Outputs packages approved analytics into report formats for underwriting, actuarial, and compliance teams. Generation stays locked until review is complete, enforcing a controlled handoff from model results to decision-ready deliverables.
       </PageDescription>
