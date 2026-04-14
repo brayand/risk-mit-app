@@ -189,6 +189,17 @@ const QuickExportButtons = ({section}) => (
     </button>
   </div>
 );
+const SectionVisual = ({title,subtitle,icon,colorA="#eaf0f8",colorB="#f7f9fc"}) => (
+  <div style={{border:`1px solid ${T.border}`,borderRadius:8,padding:14,background:`linear-gradient(135deg, ${colorA}, ${colorB})`,marginBottom:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div>
+        <div style={{fontSize:10,color:T.textDim,fontFamily:T.mono,letterSpacing:1.2,textTransform:"uppercase"}}>{title}</div>
+        <div style={{fontSize:12,color:T.text,marginTop:4,lineHeight:1.6}}>{subtitle}</div>
+      </div>
+      <div style={{fontSize:30,opacity:0.8}}>{icon}</div>
+    </div>
+  </div>
+);
 
 function KPI({label,value,sub,color,loading,sourceKey}) {
   return (
@@ -236,7 +247,7 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
         {id:"equity-holders", label:"Equity Holders",  icon:"◍"},
         {id:"insurance-providers", label:"Insurance Providers", icon:"◉"},
         {id:"debt-holders", label:"Debt Holders",      icon:"⛨"},
-        {id:"export",      label:"Export Outputs",     icon:"↗"},
+        {id:"export",      label:"Full Summary",       icon:"↗"},
       ],
     },
   ];
@@ -244,7 +255,7 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
     { category:"Inputs", items:["Data Feeds","Add Project","Human Review"] },
     { category:"Overview", items:["Portfolio Overview","Risk Register","Project Details"] },
     { category:"Analysis", items:["Correlations","Insurance Analysis","Scenario Analysis","Optimized Portfolio"] },
-    { category:"Outputs", items:["Equity Holders","Insurance Providers","Debt Holders","Export Outputs"] },
+    { category:"Outputs", items:["Equity Holders","Insurance Providers","Debt Holders","Full Summary"] },
   ];
   return (
     <aside style={{width:218,minHeight:"100vh",background:"#ffffff",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",fontFamily:T.mono,position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
@@ -288,7 +299,7 @@ function HomePage() {
     { category:"Inputs", color:"#4ecdc4", items:["Data Feeds","Add Project","Human Review"] },
     { category:"Overview", color:"#a78bfa", items:["Portfolio Overview","Risk Register","Project Details"] },
     { category:"Analysis", color:"#f0a040", items:["Correlations","Insurance Analysis","Scenario Analysis","Optimized Portfolio"] },
-    { category:"Outputs", color:"#4caf82", items:["Equity Holders","Insurance Providers","Debt Holders","Export Outputs"] },
+    { category:"Outputs", color:"#4caf82", items:["Equity Holders","Insurance Providers","Debt Holders","Full Summary"] },
   ];
   return (
     <div>
@@ -300,6 +311,11 @@ function HomePage() {
       <PageDescription>
         This platform helps teams evaluate clean-energy project risk using live external data, quantitative modeling, human governance, and stakeholder-ready outputs. Navigate through the workflow below from data intake to decision-ready deliverables.
       </PageDescription>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <SectionVisual title="Data-Driven Underwriting" subtitle="Live source integration supports transparent, auditable assumptions." icon="📈" colorA="#eef3fb" colorB="#fdfefe" />
+        <SectionVisual title="Risk Intelligence" subtitle="Scenario and optimization analytics reveal portfolio-level tradeoffs." icon="🧭" colorA="#f3f5fb" colorB="#ffffff" />
+        <SectionVisual title="Decision Outputs" subtitle="Stakeholder-specific reporting accelerates approvals and execution." icon="🗂️" colorA="#eef8f2" colorB="#ffffff" />
+      </div>
       <Card style={{marginBottom:14}}>
         <Label>Project Scope</Label>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(160px,1fr))",gap:10}}>
@@ -472,6 +488,7 @@ function Dashboard() {
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Storage · Nuclear SMR · Geothermal — NAIC RBC — Live Pipeline Data</p>
         <QuickExportButtons section="Portfolio Overview" />
       </div>
+      <SectionVisual title="Portfolio Snapshot" subtitle="Exposure, tail risk, and capital requirement indicators in one view." icon="📊" />
       <PageDescription>
         This dashboard summarizes portfolio-level exposure and loss outcomes using live project records plus synced external data. It combines project counts, capital at risk, expected annual loss, and NAIC capital requirements so you can see where risk is concentrated before drilling into model details.
       </PageDescription>
@@ -1225,6 +1242,7 @@ function ScenarioAnalysis() {
     const coverage = capital > 0 ? var99 / capital : null;
     return {...s,eal,var99,capital,coverage};
   });
+  const maxScenarioValue = Math.max(1, ...rows.map((r)=>Math.max(r.eal, r.var99, r.capital)));
   return (
     <div>
       <div style={{marginBottom:28}}>
@@ -1233,6 +1251,7 @@ function ScenarioAnalysis() {
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Stress-tested view of loss and capital adequacy across portfolio scenarios</p>
         <QuickExportButtons section="Scenario Analysis" />
       </div>
+      <SectionVisual title="Stress Lens" subtitle="Compare baseline, moderate stress, and severe stress outcomes side-by-side." icon="🌐" colorA="#f7f2ea" colorB="#ffffff" />
       <PageDescription>
         This section converts baseline portfolio outputs into stress scenarios so underwriting teams can compare expected loss, tail risk, and required capital under adverse conditions.
       </PageDescription>
@@ -1243,6 +1262,26 @@ function ScenarioAnalysis() {
           <KPI label="Baseline Capital" value={fmtM(naic?.portfolio_rbc_net)} color="#a78bfa" sourceKey="naic_calc"/>
           <KPI label="Divers. Benefit" value={`${naic?.diversification_pct ?? "—"}%`} color="#4caf82" sourceKey="naic_calc"/>
         </div>
+        <Card style={{marginBottom:14}}>
+          <Label>Scenario Comparison Chart</Label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(220px,1fr))",gap:10}}>
+            {rows.map((r)=>(
+              <div key={`${r.name}-chart`} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:10}}>
+                <div style={{fontSize:11,color:T.text,fontFamily:T.mono,marginBottom:8}}>{r.name}</div>
+                {[{k:"EAL",v:r.eal,c:"#b07a24"},{k:"VaR 99%",v:r.var99,c:"#c44545"},{k:"Capital",v:r.capital,c:"#5f6fb2"}].map((m)=>(
+                  <div key={m.k} style={{marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.textDim,fontFamily:T.mono}}>
+                      <span>{m.k}</span><span>{fmtM(m.v)}</span>
+                    </div>
+                    <div style={{height:6,background:"#e6eaf0",borderRadius:4,marginTop:3}}>
+                      <div style={{height:6,width:`${(m.v/maxScenarioValue)*100}%`,background:m.c,borderRadius:4}}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </Card>
         <Card>
           <Label>Scenario Table</Label>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -1498,7 +1537,7 @@ function HumanReview() {
       {!loading && pending===0 && Object.keys(actions).length>0 && (
         <div style={{background:"#080f0a",border:"1px solid #1a3a28",borderRadius:8,padding:20,textAlign:"center",marginTop:8}}>
           <div style={{color:"#4caf82",fontSize:18,fontFamily:T.serif,marginBottom:6}}>✓ All items reviewed — outputs unlocked</div>
-          <div style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Proceed to Export Outputs</div>
+          <div style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Proceed to Full Summary</div>
         </div>
       )}
     </div>
@@ -1536,6 +1575,8 @@ function DebtHolders() {
   const weightedDscrDen = rows.reduce((s,r)=>s + (r.dscr != null ? r.debtPrincipal : 0),0);
   const weightedDscr = weightedDscrDen > 0 ? weightedDscrNum / weightedDscrDen : null;
   const breachCount = rows.filter((r)=>r.covenant==="Breach").length;
+  const dscrRows = rows.filter((r)=>r.dscr!=null).slice(0,8);
+  const maxDscr = Math.max(1.6, ...dscrRows.map((r)=>r.dscr || 0));
 
   return (
     <div>
@@ -1545,6 +1586,7 @@ function DebtHolders() {
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Lender-focused credit view across debt service, leverage, and covenant health</p>
         <QuickExportButtons section="Debt Holders" />
       </div>
+      <SectionVisual title="Credit Monitoring" subtitle="Debt service strength and covenant health for lender committees." icon="🏛️" colorA="#eef2f9" colorB="#ffffff" />
       <PageDescription>
         This page summarizes debt holder risk for each project using debt principal, annual debt service, DSCR, leverage, and covenant-style status to support credit committee and lender monitoring workflows.
       </PageDescription>
@@ -1555,6 +1597,19 @@ function DebtHolders() {
           <KPI label="Weighted DSCR" value={weightedDscr==null ? "—" : fmtN(weightedDscr,2)} color={weightedDscr==null ? T.text : weightedDscr>=1.3 ? "#4caf82" : weightedDscr>=1.1 ? "#f0a040" : "#e85d5d"} sourceKey="financial_model"/>
           <KPI label="Covenant Breaches" value={breachCount} color={breachCount===0 ? "#4caf82" : "#e85d5d"} sourceKey="financial_model"/>
         </div>
+        <Card style={{marginBottom:14}}>
+          <Label>DSCR Distribution Chart</Label>
+          {dscrRows.length===0 ? <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>No DSCR data available.</div> : dscrRows.map((r)=>(
+            <div key={`${r.name}-dscr`} style={{marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.textDim,fontFamily:T.mono}}>
+                <span>{r.name}</span><span>{fmtN(r.dscr,2)}x</span>
+              </div>
+              <div style={{height:7,background:"#e6eaf0",borderRadius:4,marginTop:3}}>
+                <div style={{height:7,width:`${(r.dscr/maxDscr)*100}%`,background:r.dscr>=1.3?"#2f7f5f":r.dscr>=1.1?"#b07a24":"#c44545",borderRadius:4}}/>
+              </div>
+            </div>
+          ))}
+        </Card>
         <Card>
           <Label>Debt Holder Project Table</Label>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -1608,6 +1663,8 @@ function EquityHolders() {
     ? rows.filter((r)=>r.irr!=null).reduce((s,r)=>s+r.irr,0) / rows.filter((r)=>r.irr!=null).length
     : null;
   const highReturnCount = rows.filter((r)=>r.irr!=null && r.irr>=14).length;
+  const irrRows = rows.filter((r)=>r.irr!=null).slice(0,8);
+  const maxIrr = Math.max(15, ...irrRows.map((r)=>r.irr || 0));
 
   return (
     <div>
@@ -1617,6 +1674,7 @@ function EquityHolders() {
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Sponsor and investor lens on capital at risk and upside capture</p>
         <QuickExportButtons section="Equity Holders" />
       </div>
+      <SectionVisual title="Equity Value View" subtitle="Track return quality, residual cash generation, and capital at risk." icon="💼" colorA="#eef8f2" colorB="#ffffff" />
       <PageDescription>
         This page highlights equity-focused economics including committed equity, residual cash after debt service, projected IRR, and indicative return quality by project.
       </PageDescription>
@@ -1627,6 +1685,19 @@ function EquityHolders() {
           <KPI label="Avg Project IRR" value={avgIrr==null ? "—" : `${fmtN(avgIrr,2)}%`} color="#a78bfa" sourceKey="financial_model"/>
           <KPI label="High Return Projects" value={highReturnCount} color={highReturnCount>0 ? "#4caf82" : T.textDim} sourceKey="financial_model"/>
         </div>
+        <Card style={{marginBottom:14}}>
+          <Label>IRR Comparison Chart</Label>
+          {irrRows.length===0 ? <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>No IRR data available.</div> : irrRows.map((r)=>(
+            <div key={`${r.name}-irr`} style={{marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.textDim,fontFamily:T.mono}}>
+                <span>{r.name}</span><span>{fmtN(r.irr,2)}%</span>
+              </div>
+              <div style={{height:7,background:"#e6eaf0",borderRadius:4,marginTop:3}}>
+                <div style={{height:7,width:`${(r.irr/maxIrr)*100}%`,background:r.irr>=14?"#2f7f5f":r.irr>=10?"#b07a24":"#c44545",borderRadius:4}}/>
+              </div>
+            </div>
+          ))}
+        </Card>
         <Card>
           <Label>Equity Holder Project Table</Label>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -1674,6 +1745,8 @@ function InsuranceProviders() {
   const totalEal = rows.reduce((s,r)=>s+r.eal,0);
   const totalVar = rows.reduce((s,r)=>s+r.var99,0);
   const portfolioLossRatio = totalPremium>0 ? totalEal/totalPremium : null;
+  const lrRows = rows.filter((r)=>r.impliedLossRatio!=null).slice(0,8);
+  const maxLossRatio = Math.max(1.2, ...lrRows.map((r)=>r.impliedLossRatio || 0));
 
   return (
     <div>
@@ -1683,6 +1756,7 @@ function InsuranceProviders() {
         <p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Carrier-facing loss, tail, and pricing view by project</p>
         <QuickExportButtons section="Insurance Providers" />
       </div>
+      <SectionVisual title="Insurance Pricing View" subtitle="Expected loss, tail metrics, and implied pricing support." icon="🛡️" colorA="#f3f5fb" colorB="#ffffff" />
       <PageDescription>
         This page provides insurer-relevant indicators including expected loss, tail risk, implied premium signal, and loss ratio to support pricing and capacity decisions.
       </PageDescription>
@@ -1693,6 +1767,19 @@ function InsuranceProviders() {
           <KPI label="Portfolio VaR 99%" value={fmtM(totalVar)} color="#e85d5d" sourceKey="risk_engine"/>
           <KPI label="Portfolio Loss Ratio" value={portfolioLossRatio==null ? "—" : `${fmtN(portfolioLossRatio*100,1)}%`} color={portfolioLossRatio==null ? T.textDim : portfolioLossRatio<=70 ? "#4caf82" : portfolioLossRatio<=95 ? "#f0a040" : "#e85d5d"} sourceKey="risk_engine"/>
         </div>
+        <Card style={{marginBottom:14}}>
+          <Label>Loss Ratio Profile Chart</Label>
+          {lrRows.length===0 ? <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>No loss ratio data available.</div> : lrRows.map((r)=>(
+            <div key={`${r.name}-lr`} style={{marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.textDim,fontFamily:T.mono}}>
+                <span>{r.name}</span><span>{fmtN((r.impliedLossRatio||0)*100,1)}%</span>
+              </div>
+              <div style={{height:7,background:"#e6eaf0",borderRadius:4,marginTop:3}}>
+                <div style={{height:7,width:`${((r.impliedLossRatio||0)/maxLossRatio)*100}%`,background:(r.impliedLossRatio||0)<=0.70?"#2f7f5f":(r.impliedLossRatio||0)<=0.95?"#b07a24":"#c44545",borderRadius:4}}/>
+              </div>
+            </div>
+          ))}
+        </Card>
         <Card>
           <Label>Insurance Provider Project Table</Label>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -1738,9 +1825,9 @@ function ExportOutputs() {
   const reportTypes = ["Actuarial Reserve Memo","Risk Register Report","NAIC RBC Filing Package","Executive Summary","Correlation Analysis","Project Deep Dive"];
   return (
     <div>
-      <div style={{marginBottom:28}}><Label>Report Generation</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Export Outputs</h1><QuickExportButtons section="Export Outputs" /></div>
+      <div style={{marginBottom:28}}><Label>Report Generation</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Full Summary</h1><QuickExportButtons section="Full Summary" /></div>
       <PageDescription>
-        Export Outputs packages approved analytics into report formats for underwriting, actuarial, and compliance teams. Generation stays locked until review is complete, enforcing a controlled handoff from model results to decision-ready deliverables.
+        Full Summary packages approved analytics into report formats for underwriting, actuarial, and compliance teams. Generation stays locked until review is complete, enforcing a controlled handoff from model results to decision-ready deliverables.
       </PageDescription>
       {isLocked && <div style={{background:"#140808",border:"1px solid #2a1010",borderRadius:8,padding:"14px 18px",marginBottom:20,display:"flex",gap:12,alignItems:"center"}}><span style={{color:"#e85d5d"}}>🔒</span><span style={{color:"#c8a0a0",fontSize:13,fontFamily:T.mono}}>{locked.pending} review item{locked.pending>1?"s":""} pending. Complete Human Review to unlock.</span></div>}
       <Card style={{marginBottom:16}}>
