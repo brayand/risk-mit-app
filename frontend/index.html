@@ -44,10 +44,20 @@ async function api(path, opts = {}) {
 async function fetchImportAgentStatus() {
   try {
     const res = await fetch(`${API}/api/projects/import-agent-status`);
-    if (!res.ok) return { enabled: false, model: null };
+    if (!res.ok) return { enabled: false, model: null, provider: null };
     return await res.json();
   } catch (e) {
-    return { enabled: false, model: null };
+    return { enabled: false, model: null, provider: null };
+  }
+}
+
+async function checkImportAgentConnection() {
+  try {
+    const res = await fetch(`${API}/api/projects/import-agent-check`);
+    const body = await res.json().catch(() => ({}));
+    return body;
+  } catch (e) {
+    return { ok: false, detail: String(e.message || e) };
   }
 }
 
@@ -760,11 +770,13 @@ function AddProject({onProjectAdded}) {
   const [form,setForm] = useState({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   const [submitting,setSubmitting] = useState(false);
   const [done,setDone] = useState(null);
-  const [agentStatus,setAgentStatus] = useState({ enabled: false, model: null });
+  const [agentStatus,setAgentStatus] = useState({ enabled: false, model: null, provider: null });
   const [spreadsheetFile,setSpreadsheetFile] = useState(null);
   const [agentBusy,setAgentBusy] = useState(false);
   const [agentResult,setAgentResult] = useState(null);
   const [agentError,setAgentError] = useState(null);
+  const [agentCheck,setAgentCheck] = useState(null);
+  const [checking,setChecking] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   useEffect(() => {
@@ -823,17 +835,36 @@ function AddProject({onProjectAdded}) {
         </div>
       </Card>
       <Card style={{maxWidth:680,marginTop:14}}>
-        <Label>AI-assisted spreadsheet import</Label>
+        <Label>AI-assisted import (Claude)</Label>
         <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:12,lineHeight:1.6}}>
-          Upload a <strong style={{color:T.textMid}}>CSV or Excel</strong> register (any reasonable column names). The server calls an LLM to map rows to project fields, then validates and adds them to the same in-memory portfolio as manual entry. Set <code style={{fontSize:10}}>OPENAI_API_KEY</code> on the API host to enable.
+          Upload a <strong style={{color:T.textMid}}>CSV/Excel register</strong> or a <strong style={{color:T.textMid}}>PDF/text document</strong> (term sheet, permit, EPC contract). The server sends the extracted text to <strong style={{color:T.textMid}}>Claude</strong>, which maps it to project fields (incl. optional developer, COD, and notes); rows are then validated and added to the active portfolio. Set <code style={{fontSize:10}}>ANTHROPIC_API_KEY</code> on the API host to enable.
           {agentStatus.enabled && agentStatus.model ? (
-            <span> Active model: <code style={{fontSize:10}}>{agentStatus.model}</code>.</span>
+            <span> Provider: <code style={{fontSize:10}}>{agentStatus.provider||"anthropic"}</code> · model: <code style={{fontSize:10}}>{agentStatus.model}</code>.</span>
           ) : null}
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
+          <button
+            type="button"
+            disabled={!agentStatus.enabled || checking}
+            onClick={async ()=>{
+              setChecking(true); setAgentCheck(null);
+              const r = await checkImportAgentConnection();
+              setAgentCheck(r); setChecking(false);
+            }}
+            style={{padding:"7px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:!agentStatus.enabled||checking?T.border:"#345d9d",fontSize:11,fontFamily:T.mono,cursor:!agentStatus.enabled||checking?"not-allowed":"pointer"}}
+          >
+            {checking ? "TESTING…" : "TEST CONNECTION"}
+          </button>
+          {agentCheck && (
+            <span style={{fontSize:11,fontFamily:T.mono,color:agentCheck.ok?"#2f7f5f":"#c44545"}}>
+              {agentCheck.ok ? "✓ Connected" : "✕ "+(agentCheck.detail||"Failed")}
+            </span>
+          )}
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
           <input
             type="file"
-            accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            accept=".csv,.xlsx,.xls,.pdf,.txt,.md,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf,text/plain"
             onChange={(e)=>{
               const f = (e.target.files && e.target.files[0]) || null;
               setSpreadsheetFile(f);
@@ -876,7 +907,7 @@ function AddProject({onProjectAdded}) {
         </div>
         {!agentStatus.enabled && (
           <div style={{fontSize:11,color:"#b07a24",fontFamily:T.mono,marginBottom:8}}>
-            AI import is disabled until the backend has an OpenAI API key configured.
+            AI import is disabled until the backend has an Anthropic (Claude) API key configured.
           </div>
         )}
         {agentError && (
@@ -884,14 +915,14 @@ function AddProject({onProjectAdded}) {
         )}
         {agentResult && (
           <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.6}}>
-            Added {agentResult.added ?? 0} project(s).
+            Added {agentResult.added ?? 0} project(s){agentResult.source_kind ? ` from ${agentResult.source_kind}` : ""}.
             {(agentResult.errors && agentResult.errors.length > 0) ? (
               <span> {agentResult.errors.length} row(s) skipped — see API response for details.</span>
             ) : null}
           </div>
         )}
         {!spreadsheetFile && !agentResult && (
-          <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>Choose one .csv or .xlsx file.</div>
+          <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>Choose one .csv, .xlsx, .pdf, or .txt file.</div>
         )}
       </Card>
     </div>

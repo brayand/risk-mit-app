@@ -83,5 +83,8 @@ REQUEST_TIMEOUT   = 20       # seconds per HTTP request
 MAX_RETRIES       = 3
 RETRY_BACKOFF     = 2.0      # exponential backoff base (seconds)
 
-# Optional: AI-assisted project import (see /api/projects/upload-agent)
-# OPENAI_API_KEY, OPENAI_BASE_URL (default https://api.openai.com/v1), OPENAI_IMPORT_MODEL (default gpt-4o-mini)
+# Optional: AI-assisted project import via Claude (see /api/projects/upload-agent)
+# ANTHROPIC_API_KEY (required to enable)
+# ANTHROPIC_BASE_URL    (default https://api.anthropic.com)
+# ANTHROPIC_IMPORT_MODEL(default claude-3-5-sonnet-latest)
+# ANTHROPIC_VERSION     (default 2023-06-01)

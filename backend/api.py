@@ -31,9 +31,11 @@ from config import DB_PATH
 from agent.project_import_llm import (
     AgentImportError,
     agent_import_configured,
-    file_to_tabular_snippet,
-    map_snippet_to_projects,
-    OPENAI_IMPORT_MODEL,
+    agent_import_info,
+    file_to_payload,
+    map_content_to_projects,
+    verify_agent_credentials,
+    OPTIONAL_FIELDS,
 )
 
 # ── Ensure output directory exists (important for Docker persistent disk mount) 
@@ -445,6 +447,11 @@ def _ingest_project_dicts(rows: List[dict], row_base: int = 1,
                 "offtake": str(row["offtake"]).strip(),
                 "status":  str(row["status"]).strip(),
             }
+            # Optional enrichment fields (developer, cod, notes) when present.
+            for opt in OPTIONAL_FIELDS:
+                val = row.get(opt)
+                if val not in (None, ""):
+                    p[opt] = str(val).strip()
             p = attach_project_analytics(p)
             added.append(p)
         except Exception as e:
@@ -658,11 +665,14 @@ def list_financial_models():
 
 @app.get("/api/projects/import-agent-status")
 def import_agent_status():
-    """Whether AI-assisted spreadsheet import is available (requires OPENAI_API_KEY)."""
-    return {
-        "enabled": agent_import_configured(),
-        "model": OPENAI_IMPORT_MODEL if agent_import_configured() else None,
-    }
+    """Whether AI-assisted import is available (requires ANTHROPIC_API_KEY)."""
+    return agent_import_info()
+
+
+@app.get("/api/projects/import-agent-check")
+def import_agent_check():
+    """Lightweight live probe of the Claude credentials/model."""
+    return verify_agent_credentials()
 
 
 @app.post("/api/projects/upload")
@@ -681,24 +691,27 @@ async def upload_projects(file: UploadFile = File(...), portfolio_id: Optional[s
 
 @app.post("/api/projects/upload-agent")
 async def upload_projects_agent(file: UploadFile = File(...), portfolio_id: Optional[str] = None):
-    """Map CSV or Excel to project rows via LLM, then validate and merge into the portfolio."""
+    """Map a CSV/Excel register OR a PDF/text document to project rows via Claude,
+    then validate and merge into the target portfolio."""
     target = _resolve_target(portfolio_id)
     fn = (file.filename or "").lower()
-    if not any(fn.endswith(ext) for ext in (".csv", ".xlsx", ".xls")):
-        raise HTTPException(400, "Use a .csv, .xlsx, or .xls file.")
+    allowed = (".csv", ".xlsx", ".xls", ".pdf", ".txt", ".md")
+    if not any(fn.endswith(ext) for ext in allowed):
+        raise HTTPException(400, "Use a .csv, .xlsx, .xls, .pdf, .txt, or .md file.")
 
     content = await file.read()
     if not content:
         raise HTTPException(400, "Empty file.")
 
     try:
-        snippet = file_to_tabular_snippet(content, file.filename or "upload.csv")
-        raw_rows = map_snippet_to_projects(snippet)
+        text, kind = file_to_payload(content, file.filename or "upload")
+        raw_rows = map_content_to_projects(text, kind)
     except AgentImportError as e:
         raise HTTPException(e.status_code, e.message)
 
     out = _ingest_project_dicts(raw_rows, row_base=1, target=target)
     out["agent"] = True
+    out["source_kind"] = kind
     return out
 
 
