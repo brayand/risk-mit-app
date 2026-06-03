@@ -3,7 +3,7 @@ Claude-backed extraction of project data from spreadsheets or documents.
 
 Requires ANTHROPIC_API_KEY. Optional:
   ANTHROPIC_BASE_URL    (default https://api.anthropic.com)
-  ANTHROPIC_IMPORT_MODEL(default claude-3-5-sonnet-latest)
+  ANTHROPIC_IMPORT_MODEL(default claude-sonnet-4-6)
   ANTHROPIC_VERSION     (default 2023-06-01)
 
 Two extraction paths:
@@ -29,7 +29,7 @@ log = logging.getLogger("meridian.agent.import")
 PROVIDER = "anthropic"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/")
-ANTHROPIC_IMPORT_MODEL = os.getenv("ANTHROPIC_IMPORT_MODEL", "claude-3-5-sonnet-latest")
+ANTHROPIC_IMPORT_MODEL = os.getenv("ANTHROPIC_IMPORT_MODEL", "claude-sonnet-4-6")
 ANTHROPIC_VERSION = os.getenv("ANTHROPIC_VERSION", "2023-06-01")
 
 # Core required fields plus optional metadata fields the app can store/display.
