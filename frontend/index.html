@@ -41,6 +41,41 @@ async function api(path, opts = {}) {
   }
 }
 
+async function fetchImportAgentStatus() {
+  try {
+    const res = await fetch(`${API}/api/projects/import-agent-status`);
+    if (!res.ok) return { enabled: false, model: null };
+    return await res.json();
+  } catch (e) {
+    return { enabled: false, model: null };
+  }
+}
+
+async function uploadProjectsAgentSpreadsheet(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const res = await fetch(`${API}/api/projects/upload-agent`, { method: "POST", body: fd });
+    let body = {};
+    try {
+      body = await res.json();
+    } catch (_) {}
+    if (!res.ok) {
+      const d = body.detail;
+      const msg =
+        typeof d === "string"
+          ? d
+          : Array.isArray(d)
+            ? d.map((x) => x.msg || x).join("; ")
+            : JSON.stringify(body || {});
+      return { ok: false, error: msg || `HTTP ${res.status}` };
+    }
+    return { ok: true, data: body };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+}
+
 function useApi(path, deps = []) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -219,7 +254,7 @@ function KPI({label,value,sub,color,loading,sourceKey}) {
 }
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────────────────
-function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
+function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync,activePortfolioName}) {
   const navGroups = [
     {
       category: "Inputs",
@@ -270,6 +305,12 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
           <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:T.serif}}>Risk Mitigation<br/>Platform</div>
         </button>
         <div style={{marginTop:8,fontSize:9,color:T.textDim,letterSpacing:2}}>NAIC RBC · U.S. ONLY</div>
+        {activePortfolioName && (
+          <button onClick={()=>setActive("home")} title="Manage portfolios" style={{marginTop:10,width:"100%",textAlign:"left",background:"#eef3fb",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 9px",cursor:"pointer"}}>
+            <div style={{fontSize:8,color:T.textDim,letterSpacing:1.5}}>ACTIVE PORTFOLIO</div>
+            <div style={{fontSize:11,color:"#1f3f73",fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{activePortfolioName}</div>
+          </button>
+        )}
       </div>
       <nav style={{flex:1,padding:"14px 10px"}}>
         {navGroups.map((group)=>(
@@ -298,8 +339,88 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
   );
 }
 
+// ─── PORTFOLIOS ──────────────────────────────────────────────────────────────
+function Portfolios({portfolios,activeId,busy,onActivate,onCreate,onDelete}) {
+  const [showNew,setShowNew] = useState(false);
+  const [name,setName] = useState("");
+  const [desc,setDesc] = useState("");
+  const list = portfolios || [];
+
+  const submitNew = async () => {
+    if(!name.trim()) return;
+    await onCreate({name:name.trim(),description:desc.trim()});
+    setName(""); setDesc(""); setShowNew(false);
+  };
+
+  return (
+    <Card style={{marginBottom:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <Label>Portfolios</Label>
+        <button onClick={()=>setShowNew(s=>!s)} style={{padding:"7px 14px",background:showNew?"transparent":"#345d9d",border:`1px solid ${showNew?T.border:"#345d9d"}`,borderRadius:6,color:showNew?T.textDim:"#fff",fontSize:11,fontFamily:T.mono,cursor:"pointer",fontWeight:600}}>
+          {showNew?"CANCEL":"+ NEW PORTFOLIO"}
+        </button>
+      </div>
+      <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:14,lineHeight:1.6}}>
+        Each portfolio holds its own set of projects. Activate one to drive the dashboard, risk engine, correlations, and all stakeholder outputs.
+      </div>
+      {showNew && (
+        <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:14,marginBottom:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 2fr auto",gap:10,alignItems:"end"}}>
+            <div>
+              <Label>Name</Label>
+              <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. West Coast Storage" style={{width:"100%",padding:"9px 11px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Optional summary" style={{width:"100%",padding:"9px 11px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}/>
+            </div>
+            <button onClick={submitNew} disabled={!name.trim()||busy} style={{padding:"10px 18px",background:!name.trim()||busy?T.border:"#4caf82",border:"none",borderRadius:6,color:"#fff",fontSize:11,fontFamily:T.mono,fontWeight:700,cursor:!name.trim()||busy?"not-allowed":"pointer"}}>
+              CREATE
+            </button>
+          </div>
+          <div style={{fontSize:10,color:T.textMid,fontFamily:T.mono,marginTop:8}}>New portfolios start empty — add projects from the Add Project page once activated.</div>
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+        {list.map((p)=>{
+          const isActive = p.id===activeId;
+          return (
+            <div key={p.id} style={{padding:14,background:isActive?"#eef3fb":T.bg,border:`1px solid ${isActive?"#345d9d":T.border}`,borderRadius:8,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.serif,lineHeight:1.2}}>{p.name}</div>
+                {isActive && <Tag color="#345d9d">ACTIVE</Tag>}
+              </div>
+              <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.5,minHeight:32}}>{p.description||"—"}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div><div style={{fontSize:9,color:T.textDim,fontFamily:T.mono,letterSpacing:1}}>PROJECTS</div><div style={{fontSize:14,color:T.text,fontFamily:T.mono}}>{p.project_count}</div></div>
+                <div><div style={{fontSize:9,color:T.textDim,fontFamily:T.mono,letterSpacing:1}}>CAPEX</div><div style={{fontSize:14,color:T.text,fontFamily:T.mono}}>{fmtM(p.total_capex)}</div></div>
+                <div><div style={{fontSize:9,color:T.textDim,fontFamily:T.mono,letterSpacing:1}}>CAPACITY</div><div style={{fontSize:14,color:T.text,fontFamily:T.mono}}>{fmtN(p.total_mw)} MW</div></div>
+                <div><div style={{fontSize:9,color:T.textDim,fontFamily:T.mono,letterSpacing:1}}>AVG RISK</div><div style={{fontSize:14,color:p.avg_composite==null?T.textDim:riskColor(p.avg_composite),fontFamily:T.mono}}>{p.avg_composite==null?"—":p.avg_composite.toFixed(1)}</div></div>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {Object.entries(p.types||{}).map(([t,c])=>(
+                  <span key={t} style={{fontSize:9,padding:"2px 7px",borderRadius:10,background:`${typeColor(t)}18`,color:typeColor(t),border:`1px solid ${typeColor(t)}30`,fontFamily:T.mono}}>{typeIcon(t)} {t} · {c}</span>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:"auto"}}>
+                <button onClick={()=>onActivate(p.id)} disabled={isActive||busy} style={{flex:1,padding:"8px 0",background:isActive?"transparent":"#345d9d",border:`1px solid ${isActive?T.border:"#345d9d"}`,borderRadius:6,color:isActive?T.textDim:"#fff",fontSize:11,fontFamily:T.mono,fontWeight:600,cursor:isActive||busy?"default":"pointer"}}>
+                  {isActive?"ACTIVE":"ACTIVATE"}
+                </button>
+                <button onClick={()=>onDelete(p.id)} disabled={busy||list.length<=1} title={list.length<=1?"At least one portfolio is required":"Delete portfolio"} style={{padding:"8px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:list.length<=1?T.border:"#c44545",fontSize:11,fontFamily:T.mono,cursor:busy||list.length<=1?"not-allowed":"pointer"}}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {list.length===0 && <div style={{fontSize:12,color:T.textDim,fontFamily:T.mono}}>No portfolios yet.</div>}
+      </div>
+    </Card>
+  );
+}
+
 // ─── HOME ──────────────────────────────────────────────────────────────────────
-function HomePage() {
+function HomePage({portfolios,activePortfolioId,portfolioBusy,onActivatePortfolio,onCreatePortfolio,onDeletePortfolio}) {
   const flow = [
     { category:"Inputs", color:"#4ecdc4", items:["Data Feeds","Add Project","Human Review"] },
     { category:"Overview", color:"#a78bfa", items:["Portfolio Overview","Risk Register","Project Details"] },
@@ -316,6 +437,14 @@ function HomePage() {
       <PageDescription>
         This platform helps teams evaluate clean-energy project risk using live external data, quantitative modeling, human governance, and stakeholder-ready outputs. Navigate through the workflow below from data intake to decision-ready deliverables.
       </PageDescription>
+      <Portfolios
+        portfolios={portfolios}
+        activeId={activePortfolioId}
+        busy={portfolioBusy}
+        onActivate={onActivatePortfolio}
+        onCreate={onCreatePortfolio}
+        onDelete={onDeletePortfolio}
+      />
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
         <SectionVisual title="Data-Driven Underwriting" subtitle="Live source integration supports transparent, auditable assumptions." icon="📈" colorA="#eef3fb" colorB="#fdfefe" />
         <SectionVisual title="Risk Intelligence" subtitle="Scenario and optimization analytics reveal portfolio-level tradeoffs." icon="🧭" colorA="#f3f5fb" colorB="#ffffff" />
@@ -631,8 +760,20 @@ function AddProject({onProjectAdded}) {
   const [form,setForm] = useState({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   const [submitting,setSubmitting] = useState(false);
   const [done,setDone] = useState(null);
-  const [dataRoomFiles,setDataRoomFiles] = useState([]);
+  const [agentStatus,setAgentStatus] = useState({ enabled: false, model: null });
+  const [spreadsheetFile,setSpreadsheetFile] = useState(null);
+  const [agentBusy,setAgentBusy] = useState(false);
+  const [agentResult,setAgentResult] = useState(null);
+  const [agentError,setAgentError] = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchImportAgentStatus().then((s) => {
+      if (!cancelled) setAgentStatus(s);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const STATES = ["AK","AL","AR","AZ","CA","CO","CT","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"];
   const submit = async () => {
     if(!form.name||!form.mw||!form.capex) return;
@@ -682,26 +823,76 @@ function AddProject({onProjectAdded}) {
         </div>
       </Card>
       <Card style={{maxWidth:680,marginTop:14}}>
-        <Label>Data Room Upload (Placeholder)</Label>
+        <Label>AI-assisted spreadsheet import</Label>
         <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:12,lineHeight:1.6}}>
-          Upload diligence files (term sheets, EPC contracts, permits, financial model, and insurance docs). A future AI Agent will parse these files and pre-fill project fields, flag risks, and draft review notes.
+          Upload a <strong style={{color:T.textMid}}>CSV or Excel</strong> register (any reasonable column names). The server calls an LLM to map rows to project fields, then validates and adds them to the same in-memory portfolio as manual entry. Set <code style={{fontSize:10}}>OPENAI_API_KEY</code> on the API host to enable.
+          {agentStatus.enabled && agentStatus.model ? (
+            <span> Active model: <code style={{fontSize:10}}>{agentStatus.model}</code>.</span>
+          ) : null}
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
           <input
             type="file"
-            multiple
-            onChange={(e)=>setDataRoomFiles(Array.from(e.target.files||[]))}
+            accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            onChange={(e)=>{
+              const f = (e.target.files && e.target.files[0]) || null;
+              setSpreadsheetFile(f);
+              setAgentResult(null);
+              setAgentError(null);
+            }}
             style={{fontSize:11,color:T.textDim,fontFamily:T.mono}}
           />
-          <button disabled style={{padding:"9px 14px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.textDim,fontSize:11,fontFamily:T.mono,cursor:"not-allowed"}}>
-            PARSE WITH AI AGENT (COMING SOON)
+          <button
+            type="button"
+            disabled={!agentStatus.enabled || !spreadsheetFile || agentBusy}
+            onClick={async ()=>{
+              if (!spreadsheetFile) return;
+              setAgentBusy(true);
+              setAgentError(null);
+              setAgentResult(null);
+              const r = await uploadProjectsAgentSpreadsheet(spreadsheetFile);
+              setAgentBusy(false);
+              if (r.ok) {
+                setAgentResult(r.data);
+                onProjectAdded?.();
+              } else {
+                setAgentError(r.error);
+              }
+            }}
+            style={{
+              padding:"9px 14px",
+              background:!agentStatus.enabled||!spreadsheetFile||agentBusy?T.border:"#a78bfa",
+              border:"none",
+              borderRadius:6,
+              color:T.bg,
+              fontSize:11,
+              fontFamily:T.mono,
+              cursor:!agentStatus.enabled||!spreadsheetFile||agentBusy?"not-allowed":"pointer",
+              fontWeight:600,
+            }}
+          >
+            {agentBusy ? "IMPORTING…" : "IMPORT WITH AI →"}
           </button>
         </div>
-        <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>
-          {dataRoomFiles.length===0
-            ? "No files selected yet."
-            : `${dataRoomFiles.length} file(s) selected for future parsing.`}
-        </div>
+        {!agentStatus.enabled && (
+          <div style={{fontSize:11,color:"#b07a24",fontFamily:T.mono,marginBottom:8}}>
+            AI import is disabled until the backend has an OpenAI API key configured.
+          </div>
+        )}
+        {agentError && (
+          <div style={{fontSize:11,color:"#c44545",fontFamily:T.mono,marginBottom:8,whiteSpace:"pre-wrap"}}>{agentError}</div>
+        )}
+        {agentResult && (
+          <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.6}}>
+            Added {agentResult.added ?? 0} project(s).
+            {(agentResult.errors && agentResult.errors.length > 0) ? (
+              <span> {agentResult.errors.length} row(s) skipped — see API response for details.</span>
+            ) : null}
+          </div>
+        )}
+        {!spreadsheetFile && !agentResult && (
+          <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>Choose one .csv or .xlsx file.</div>
+        )}
       </Card>
     </div>
   );
@@ -1028,11 +1219,41 @@ function CorrelationMatrix() {
     <div>
       <div style={{marginBottom:28}}><Label>Dependency Structure</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Correlation Matrix</h1><p style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>Pearson correlations · t-Copula (ν=4) · used in Monte Carlo simulation</p><QuickExportButtons section="Correlations" /></div>
       <PageDescription>
-        The matrix shows how project risk factors move together instead of independently. These dependency assumptions are applied in simulation to produce portfolio-level VaR and TVaR that reflect diversification and concentration effects.
+        Subcategory correlations roll up to an 8×8 category matrix used in Monte Carlo. Category risk scores in the Risk Register are the mean of each parent’s eight subcomponent scores, then weighted into the composite.
       </PageDescription>
+      {data?.rollup_method && (
+        <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:14,lineHeight:1.6}}>{data.rollup_method}</div>
+      )}
+      {!loading && data?.category_matrix && (
+        <Card style={{overflowX:"auto",marginBottom:14}}>
+          <Label>Category rollup (8×8) — Monte Carlo</Label>
+          <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono,marginTop:10}}>
+            <thead><tr>
+              <th style={{width:100}}/>
+              {(data.category_labels||[]).map((l,i)=>(
+                <th key={i} style={{padding:"4px 6px",color:T.textDim,fontWeight:500,textAlign:"center",textTransform:"capitalize"}}>{l.replace("_"," ")}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {(data.category_matrix||[]).map((row,i)=>(
+                <tr key={i}>
+                  <td style={{padding:"4px 10px 4px 0",color:T.textMid,textTransform:"capitalize",fontSize:10}}>{data.category_labels?.[i]?.replace("_"," ")}</td>
+                  {row.map((v,j)=>(
+                    <td key={j} style={{padding:2}}>
+                      <div style={{width:52,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:corrColor(v),borderRadius:3,color:v>0.5?"#fff":T.textMid,fontSize:10}}>
+                        <SourceHint sourceKey="correlation_calc">{Number(v).toFixed(2)}</SourceHint>
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
       {loading ? <Spinner/> : (
         <Card style={{overflowX:"auto"}}>
-          <Label>Portfolio (baseline)</Label>
+          <Label>Subcomponent matrix (64×64)</Label>
           <table style={{borderCollapse:"collapse",fontSize:10,fontFamily:T.mono,marginTop:10}}>
             <thead><tr>
               <th style={{width:120}}/>
@@ -1892,13 +2113,25 @@ function App() {
   const [pipelineRunning,setPipeline]    = useState(false);
   const [reviewPending,setReviewPending] = useState(0);
   const [pv,setPv]                       = useState(0);
+  const [portfolios,setPortfolios]       = useState([]);
+  const [activePortfolioId,setActivePortfolioId] = useState(null);
+  const [portfolioBusy,setPortfolioBusy] = useState(false);
+
+  const pollReview = useCallback(async()=>{
+    const d=await api("/api/review/items"); if(d) setReviewPending(d.pending||0);
+  },[]);
+
+  const loadPortfolios = useCallback(async()=>{
+    const d = await api("/api/portfolios");
+    if(d){ setPortfolios(d.portfolios||[]); setActivePortfolioId(d.active_id||null); }
+  },[]);
 
   useEffect(()=>{
-    const poll = async()=>{ const d=await api("/api/review/items"); if(d) setReviewPending(d.pending||0); };
-    poll();
-    const id=setInterval(poll,30000);
+    pollReview();
+    loadPortfolios();
+    const id=setInterval(pollReview,30000);
     return ()=>clearInterval(id);
-  },[]);
+  },[pollReview,loadPortfolios]);
 
   useEffect(() => {
     const onNavigate = (e) => {
@@ -1915,8 +2148,42 @@ function App() {
     setTimeout(()=>setPipeline(false),8000);
   };
 
+  const refreshActivePortfolio = useCallback(async()=>{
+    await loadPortfolios();
+    setPv(v=>v+1);     // remount all data screens so they refetch the active book
+    pollReview();
+  },[loadPortfolios,pollReview]);
+
+  const onActivatePortfolio = useCallback(async(id)=>{
+    setPortfolioBusy(true);
+    await api(`/api/portfolios/${id}/activate`,{method:"POST"});
+    await refreshActivePortfolio();
+    setPortfolioBusy(false);
+  },[refreshActivePortfolio]);
+
+  const onCreatePortfolio = useCallback(async(body)=>{
+    setPortfolioBusy(true);
+    await api("/api/portfolios",{method:"POST",body:JSON.stringify(body)});
+    await loadPortfolios();
+    setPortfolioBusy(false);
+  },[loadPortfolios]);
+
+  const onDeletePortfolio = useCallback(async(id)=>{
+    setPortfolioBusy(true);
+    await api(`/api/portfolios/${id}`,{method:"DELETE"});
+    await refreshActivePortfolio();
+    setPortfolioBusy(false);
+  },[refreshActivePortfolio]);
+
+  const activePortfolio = portfolios.find(p=>p.id===activePortfolioId);
+
+  const homeProps = {
+    portfolios, activePortfolioId, portfolioBusy,
+    onActivatePortfolio, onCreatePortfolio, onDeletePortfolio,
+  };
+
   const screens = {
-    "home":        <HomePage/>,
+    "home":        <HomePage {...homeProps}/>,
     "dashboard":   <Dashboard key={pv}/>,
     "add-project": <AddProject onProjectAdded={()=>setPv(v=>v+1)}/>,
     "risk-model":  <RiskModel key={pv}/>,
@@ -1955,7 +2222,7 @@ function App() {
           100%{transform:scale(1); box-shadow:0 0 0 0 rgba(52,93,157,0);}
         }
       `}</style>
-      <Sidebar active={active} setActive={setActive} reviewPending={reviewPending} pipelineRunning={pipelineRunning} onSync={handleSync}/>
+      <Sidebar active={active} setActive={setActive} reviewPending={reviewPending} pipelineRunning={pipelineRunning} onSync={handleSync} activePortfolioName={activePortfolio?.name}/>
       <main style={{marginLeft:218,padding:"40px 48px",maxWidth:1260}}>
         {screens[active]||<Dashboard/>}
       </main>

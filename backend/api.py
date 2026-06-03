@@ -4,7 +4,7 @@ Exposes all pipeline data and risk engine computations as REST endpoints.
 Run: uvicorn api:app --reload --port 8000
 """
 
-import sys, os, math, json
+import sys, os, math, json, re
 sys.path.insert(0, os.path.dirname(__file__))
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
@@ -18,9 +18,23 @@ import io
 import csv
 
 from schema.db import init_db, get_conn
-from etl.risk_engine import RiskEngine, FACTOR_KEYS, CORR, RISK_WEIGHTS
+from etl.risk_engine import RiskEngine
+from etl.risk_structure import (
+    FACTOR_KEYS,
+    RISK_WEIGHTS,
+    SUBCOMPONENT_SPECS,
+    build_correlation_bundle,
+    build_project_subcomponents,
+)
 from orchestrator import run_pipeline
 from config import DB_PATH
+from agent.project_import_llm import (
+    AgentImportError,
+    agent_import_configured,
+    file_to_tabular_snippet,
+    map_snippet_to_projects,
+    OPENAI_IMPORT_MODEL,
+)
 
 # ── Ensure output directory exists (important for Docker persistent disk mount) 
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -35,19 +49,105 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── In-memory project store (replace with DB table in production) ─────────────
-_projects: List[dict] = [
-    {"id": "p1", "name": "Nevada Geothermal Basin Alpha", "type": "Geothermal",
-     "state": "NV", "mw": 45,   "capex": 142_000_000, "offtake": "PPA-Utility",   "status": "Operating"},
-    {"id": "p2", "name": "Idaho SMR Pilot Unit 1",       "type": "Nuclear SMR",
-     "state": "ID", "mw": 77,   "capex": 890_000_000, "offtake": "Merchant",       "status": "Construction"},
-    {"id": "p3", "name": "Texas Grid-Scale BESS",         "type": "Battery Storage",
-     "state": "TX", "mw": 200,  "capex":  78_000_000, "offtake": "Merchant",       "status": "Operating"},
-    {"id": "p4", "name": "Oregon Cascade Geothermal",    "type": "Geothermal",
-     "state": "OR", "mw": 30,   "capex":  98_000_000, "offtake": "PPA-Commercial", "status": "Development"},
-    {"id": "p5", "name": "Wyoming SMR Cluster",          "type": "Nuclear SMR",
-     "state": "WY", "mw": 154,  "capex": 1_640_000_000,"offtake": "PPA-Utility",  "status": "Development"},
+# ── In-memory multi-portfolio store (replace with DB tables in production) ────
+# Each portfolio holds its own independent set of projects.
+_portfolios: List[dict] = [
+    {
+        "id": "port-flagship",
+        "name": "Clean Energy Flagship",
+        "description": "Diversified U.S. clean-energy book across geothermal, SMR, and storage.",
+        "projects": [
+            {"id": "p1", "name": "Nevada Geothermal Basin Alpha", "type": "Geothermal",
+             "state": "NV", "mw": 45,   "capex": 142_000_000, "offtake": "PPA-Utility",   "status": "Operating"},
+            {"id": "p2", "name": "Idaho SMR Pilot Unit 1",       "type": "Nuclear SMR",
+             "state": "ID", "mw": 77,   "capex": 890_000_000, "offtake": "Merchant",       "status": "Construction"},
+            {"id": "p3", "name": "Texas Grid-Scale BESS",         "type": "Battery Storage",
+             "state": "TX", "mw": 200,  "capex":  78_000_000, "offtake": "Merchant",       "status": "Operating"},
+            {"id": "p4", "name": "Oregon Cascade Geothermal",    "type": "Geothermal",
+             "state": "OR", "mw": 30,   "capex":  98_000_000, "offtake": "PPA-Commercial", "status": "Development"},
+            {"id": "p5", "name": "Wyoming SMR Cluster",          "type": "Nuclear SMR",
+             "state": "WY", "mw": 154,  "capex": 1_640_000_000,"offtake": "PPA-Utility",  "status": "Development"},
+        ],
+    },
+    {
+        "id": "port-nuclear",
+        "name": "Nuclear SMR Focus",
+        "description": "Concentrated small modular reactor development and construction pipeline.",
+        "projects": [
+            {"id": "p6", "name": "Tennessee SMR Array",         "type": "Nuclear SMR",
+             "state": "TN", "mw": 120,  "capex": 1_280_000_000, "offtake": "PPA-Utility",   "status": "Construction"},
+            {"id": "p7", "name": "Utah Advanced SMR",           "type": "Nuclear SMR",
+             "state": "UT", "mw": 92,   "capex": 1_010_000_000, "offtake": "PPA-Utility",   "status": "Development"},
+            {"id": "p8", "name": "South Carolina SMR Unit 2",   "type": "Nuclear SMR",
+             "state": "SC", "mw": 110,  "capex": 1_150_000_000, "offtake": "Merchant",      "status": "Development"},
+            {"id": "p9", "name": "Washington SMR Demonstrator", "type": "Nuclear SMR",
+             "state": "WA", "mw": 60,   "capex":  720_000_000, "offtake": "Self-Supply",    "status": "Construction"},
+        ],
+    },
+    {
+        "id": "port-storage-geo",
+        "name": "Storage & Geothermal",
+        "description": "Lower-risk operating storage and geothermal assets.",
+        "projects": [
+            {"id": "p10", "name": "Arizona Desert BESS",        "type": "Battery Storage",
+             "state": "AZ", "mw": 250,  "capex":  96_000_000, "offtake": "Merchant",        "status": "Operating"},
+            {"id": "p11", "name": "California Coastal Storage",  "type": "Battery Storage",
+             "state": "CA", "mw": 180,  "capex":  88_000_000, "offtake": "PPA-Commercial",  "status": "Operating"},
+            {"id": "p12", "name": "Utah FORGE Geothermal",      "type": "Geothermal",
+             "state": "UT", "mw": 40,   "capex": 120_000_000, "offtake": "PPA-Utility",     "status": "Development"},
+            {"id": "p13", "name": "Nevada Steamboat Geothermal","type": "Geothermal",
+             "state": "NV", "mw": 55,   "capex": 150_000_000, "offtake": "PPA-Utility",     "status": "Operating"},
+        ],
+    },
 ]
+
+# Active-portfolio pointer. `_projects` always references the active portfolio's
+# project list object, so existing endpoints keep operating on the active book.
+_active_portfolio_id: str = _portfolios[0]["id"]
+_projects: List[dict] = _portfolios[0]["projects"]
+
+
+def _find_portfolio(pid: str) -> Optional[dict]:
+    return next((p for p in _portfolios if p["id"] == pid), None)
+
+
+def _set_active_portfolio(pid: str) -> dict:
+    """Rebind the active project list. Raises 404 if the portfolio is unknown."""
+    global _projects, _active_portfolio_id
+    port = _find_portfolio(pid)
+    if not port:
+        raise HTTPException(404, "Portfolio not found")
+    _active_portfolio_id = pid
+    _projects = port["projects"]
+    return port
+
+
+def _new_project_id() -> str:
+    global _pid_counter
+    _pid_counter += 1
+    return f"p{_pid_counter}"
+
+
+def _new_portfolio_id(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", (name or "portfolio").lower()).strip("-") or "portfolio"
+    pid = f"port-{base}"
+    existing = {p["id"] for p in _portfolios}
+    if pid not in existing:
+        return pid
+    i = 2
+    while f"{pid}-{i}" in existing:
+        i += 1
+    return f"{pid}-{i}"
+
+
+def _resolve_target(portfolio_id: Optional[str]) -> List[dict]:
+    """Target project list for a mutation: a named portfolio, or the active one."""
+    if not portfolio_id:
+        return _projects
+    port = _find_portfolio(portfolio_id)
+    if not port:
+        raise HTTPException(404, "Portfolio not found")
+    return port["projects"]
 
 _pipeline_status = {"last_run": None, "running": False, "last_result": None}
 
@@ -65,6 +165,10 @@ class ReviewAction(BaseModel):
     item_id: int
     action: str       # "approve" | "dismiss"
     note: Optional[str] = ""
+
+class PortfolioIn(BaseModel):
+    name: str
+    description: Optional[str] = ""
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def get_engine():
@@ -111,183 +215,6 @@ def _offtake_price_usd_mwh(offtake: str) -> float:
         "Self-Supply": 65.0,
     }
     return by_offtake.get(offtake, 75.0)
-
-
-SUBCOMPONENT_TEMPLATES = {
-    "technology": [
-        ("Tech Maturity", "Technology readiness and proven deployment.", +7),
-        ("Design Complexity", "Engineering design complexity and uncertainty.", +4),
-        ("Supply Chain Depth", "Critical component supply chain resilience.", +2),
-        ("Vendor Concentration", "Dependency on single-source vendors.", 0),
-        ("Integration Risk", "System integration coupling risk.", -2),
-        ("Performance Variability", "Output and performance variability risk.", -4),
-        ("Degradation Profile", "Aging/degradation and lifecycle uncertainty.", -6),
-        ("Innovation Risk", "Novel feature risk beyond reference plants.", -8),
-    ],
-    "regulatory": [
-        ("Licensing Complexity", "Permit/NRC review complexity and uncertainty.", +7),
-        ("Policy Stability", "State/federal policy and market rule volatility.", +5),
-        ("Compliance Burden", "Ongoing compliance and reporting burden.", +3),
-        ("Siting Constraints", "Land-use/environmental siting constraint risk.", +1),
-        ("Permit Lead Time", "Schedule sensitivity to permit lead times.", -1),
-        ("Community Opposition", "Public/legal challenge exposure.", -3),
-        ("Interconnection Rules", "Grid interconnection regulatory uncertainty.", -5),
-        ("Cross-Agency Coordination", "Multi-agency approval coordination risk.", -7),
-    ],
-    "construction": [
-        ("Schedule Pressure", "Probability of timeline slippage.", +8),
-        ("Cost Overrun Risk", "Likelihood of capex overrun versus plan.", +6),
-        ("Labor Productivity", "Field productivity and rework risk.", +4),
-        ("EPC Counterparty", "EPC contractor execution reliability.", +2),
-        ("Site Conditions", "Subsurface/logistics site uncertainty.", 0),
-        ("Procurement Timing", "Long-lead equipment timing risk.", -2),
-        ("Commissioning Risk", "Startup/commissioning defect risk.", -4),
-        ("Change-Order Exposure", "Scope change / variation-order risk.", -6),
-    ],
-    "counterparty": [
-        ("Offtake Credit", "Counterparty credit and default resilience.", +7),
-        ("Contract Structure", "Contract terms and merchant exposure.", +5),
-        ("Concentration Risk", "Revenue concentration in few counterparties.", +3),
-        ("Tenor Mismatch", "Contract tenor mismatch versus asset life.", +1),
-        ("Indexation Terms", "Tariff/indexation term uncertainty.", -1),
-        ("Collateral Strength", "Collateral and guarantee quality risk.", -3),
-        ("Termination Clauses", "Early termination clause risk.", -5),
-        ("Dispute Risk", "Commercial dispute / enforcement risk.", -7),
-    ],
-    "physical": [
-        ("Seismic Exposure", "Geologic and seismic hazard sensitivity.", +8),
-        ("Climate Exposure", "Weather and long-term climate hazard pressure.", +6),
-        ("Flood/Wildfire Exposure", "Acute natural hazard exposure.", +4),
-        ("Water Availability", "Water resource and cooling availability risk.", +2),
-        ("Thermal Stress", "Heat/cold operating stress risk.", 0),
-        ("Geotechnical Stability", "Ground stability and subsidence risk.", -2),
-        ("Environmental Incidents", "Environmental incident probability.", -4),
-        ("Emergency Access", "Emergency response accessibility risk.", -6),
-    ],
-    "financial": [
-        ("Rate Sensitivity", "Interest-rate and refinancing sensitivity.", +7),
-        ("Refinance Risk", "Future refinancing / covenant stress risk.", +5),
-        ("Liquidity Buffer", "Working-capital and liquidity stress risk.", +3),
-        ("Leverage Pressure", "Debt-service leverage pressure.", +1),
-        ("FX/Commodity Linkage", "Indirect commodity/fx linkage risk.", -1),
-        ("Inflation Pass-through", "Cost inflation pass-through risk.", -3),
-        ("Hedge Effectiveness", "Hedge mismatch and basis risk.", -5),
-        ("Capital Access", "Access-to-capital cyclicality risk.", -7),
-    ],
-    "operational": [
-        ("Asset Reliability", "Operational reliability and forced outage risk.", +7),
-        ("Dispatch Flexibility", "Operational flexibility under market stress.", +5),
-        ("Maintenance Quality", "Maintenance planning and execution risk.", +3),
-        ("Control Systems", "Control/automation performance risk.", +1),
-        ("Spare Parts Lead Time", "Critical spare parts availability risk.", -1),
-        ("Cyber Resilience", "Cyber operations and downtime risk.", -3),
-        ("Grid Curtailment", "Curtailment and dispatch constraint risk.", -5),
-        ("Outage Recovery", "Recovery-time and restart reliability risk.", -7),
-    ],
-    "workforce": [
-        ("Labor Availability", "Skilled labor availability and retention.", +7),
-        ("Safety Culture", "Training/safety culture and incident prevention.", +5),
-        ("Training Pipeline", "Talent development pipeline sufficiency.", +3),
-        ("Union/Labor Relations", "Labor relations and disruption risk.", +1),
-        ("Turnover Risk", "Attrition-driven capability erosion risk.", -1),
-        ("Contractor Dependence", "Dependence on third-party contractors.", -3),
-        ("Shift Coverage", "Shift coverage and fatigue management risk.", -5),
-        ("Specialist Scarcity", "Specialist role scarcity risk.", -7),
-    ],
-}
-
-SUBCOMPONENT_SPECS = [
-    (label, parent, desc, offset)
-    for parent in FACTOR_KEYS
-    for (label, desc, offset) in SUBCOMPONENT_TEMPLATES[parent]
-]
-
-
-def build_project_subcomponents(project: dict) -> dict:
-    """Build per-project correlation subcomponent scores (0-100)."""
-    tech = project.get("type", "Geothermal")
-    status = project.get("status", "Development")
-    offtake = project.get("offtake", "Merchant")
-    state = project.get("state", "")
-    capex = float(project.get("capex", 0))
-
-    tech_base = {
-        "Geothermal": {"technology": 55, "regulatory": 45, "construction": 60, "operational": 50},
-        "Nuclear SMR": {"technology": 78, "regulatory": 82, "construction": 75, "operational": 45},
-        "Battery Storage": {"technology": 35, "regulatory": 30, "construction": 40, "operational": 42},
-    }.get(tech, {"technology": 50, "regulatory": 50, "construction": 50, "operational": 50})
-    status_mult = {"Development": 1.25, "Construction": 1.40, "Operating": 0.75, "Decommissioning": 1.10}.get(status, 1.0)
-    offtake_base = {"PPA-Utility": 30, "PPA-Commercial": 48, "Merchant": 72, "Self-Supply": 55}.get(offtake, 55)
-
-    physical_seed = 55 if state in {"CA", "NV", "AK", "HI", "WA"} else 40
-    financial_seed = 45 + max(0, (capex / 1e9 - 0.5) * 8)
-    workforce_seed = {"Nuclear SMR": 65, "Geothermal": 45, "Battery Storage": 35}.get(tech, 45)
-    parent_scores = {
-        "technology": tech_base["technology"] * status_mult,
-        "regulatory": tech_base["regulatory"] * status_mult,
-        "construction": tech_base["construction"] * status_mult,
-        "counterparty": offtake_base * status_mult,
-        "physical": physical_seed * status_mult,
-        "financial": financial_seed * status_mult,
-        "operational": tech_base["operational"] * status_mult,
-        "workforce": workforce_seed * status_mult,
-    }
-
-    subs = {}
-    for label, parent, desc, off in SUBCOMPONENT_SPECS:
-        val = max(0.0, min(99.0, parent_scores[parent] + off))
-        subs[label] = {"score": round(val, 2), "parent_factor": parent, "description": desc}
-    return subs
-
-
-def _build_subcomponent_matrix() -> dict:
-    labels = [x[0] for x in SUBCOMPONENT_SPECS]
-    parent_by_label = {x[0]: x[1] for x in SUBCOMPONENT_SPECS}
-    desc_by_label = {x[0]: x[2] for x in SUBCOMPONENT_SPECS}
-    factor_index = {k: i for i, k in enumerate(FACTOR_KEYS)}
-    matrix = []
-    for li in labels:
-        row = []
-        for lj in labels:
-            if li == lj:
-                row.append(1.0)
-                continue
-            pi = parent_by_label[li]
-            pj = parent_by_label[lj]
-            base = CORR[factor_index[pi]][factor_index[pj]]
-            if pi == pj:
-                base = min(0.95, base + 0.22)
-            row.append(round(max(0.05, min(0.99, base)), 3))
-        matrix.append(row)
-    parent_counts = {}
-    for p in FACTOR_KEYS:
-        parent_counts[p] = len([1 for _, parent, _, _ in SUBCOMPONENT_SPECS if parent == p]) or 1
-    weights = [round(RISK_WEIGHTS[parent_by_label[l]] / parent_counts[parent_by_label[l]], 4) for l in labels]
-    grouped = {}
-    for parent in FACTOR_KEYS:
-        idxs = [i for i, l in enumerate(labels) if parent_by_label[l] == parent]
-        if not idxs:
-            continue
-        g_labels = [labels[i] for i in idxs]
-        g_keys = [g.lower().replace(" ", "_") for g in g_labels]
-        g_matrix = [[matrix[i][j] for j in idxs] for i in idxs]
-        grouped[parent] = {
-            "parent_factor": parent,
-            "labels": g_labels,
-            "keys": g_keys,
-            "matrix": g_matrix,
-            "descriptions": [desc_by_label[l] for l in g_labels],
-        }
-
-    return {
-        "labels": labels,
-        "keys": [l.lower().replace(" ", "_") for l in labels],
-        "matrix": matrix,
-        "weights": weights,
-        "parents": [parent_by_label[l] for l in labels],
-        "descriptions": [desc_by_label[l] for l in labels],
-        "grouped_matrices": grouped,
-    }
 
 
 def _variance_assumptions(project_type: str) -> dict:
@@ -491,8 +418,40 @@ def attach_project_analytics(project: dict) -> dict:
     return project
 
 
-for _p in _projects:
-    attach_project_analytics(_p)
+_pid_counter = 0
+for _port in _portfolios:
+    for _p in _port["projects"]:
+        attach_project_analytics(_p)
+        _pid_counter += 1
+
+
+def _ingest_project_dicts(rows: List[dict], row_base: int = 1,
+                          target: Optional[List[dict]] = None) -> dict:
+    """Append validated projects to a target list (active portfolio by default)."""
+    target = _projects if target is None else target
+    added: List[dict] = []
+    errors: List[dict] = []
+    for i, row in enumerate(rows):
+        try:
+            if not isinstance(row, dict):
+                raise ValueError("row must be an object")
+            p = {
+                "id":      _new_project_id(),
+                "name":    str(row["name"]).strip(),
+                "type":    str(row["type"]).strip(),
+                "state":   str(row["state"]).strip().upper(),
+                "mw":      float(row["mw"]),
+                "capex":   float(row["capex"]),
+                "offtake": str(row["offtake"]).strip(),
+                "status":  str(row["status"]).strip(),
+            }
+            p = attach_project_analytics(p)
+            added.append(p)
+        except Exception as e:
+            errors.append({"row": row_base + i, "error": str(e)})
+    target.extend(added)
+    return {"added": len(added), "errors": errors, "projects": added}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH / META
@@ -549,27 +508,122 @@ def pipeline_status():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# PORTFOLIOS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _portfolio_summary(port: dict) -> dict:
+    """Lightweight summary for the home screen (no Monte Carlo)."""
+    projs = port["projects"]
+    total_capex = sum(float(p.get("capex", 0)) for p in projs)
+    total_mw = sum(float(p.get("mw", 0)) for p in projs)
+    types: dict = {}
+    for p in projs:
+        types[p["type"]] = types.get(p["type"], 0) + 1
+
+    avg_composite = None
+    if projs:
+        try:
+            engine = get_engine()
+            comps = [
+                engine.score_project(
+                    technology=p["type"], state=p["state"], capex=p["capex"],
+                    mw=p["mw"], status=p["status"], offtake=p["offtake"],
+                )["composite"]
+                for p in projs
+            ]
+            avg_composite = round(sum(comps) / len(comps), 1)
+        except Exception as e:
+            log.warning(f"[portfolio] summary scoring failed: {e}")
+
+    return {
+        "id": port["id"],
+        "name": port["name"],
+        "description": port.get("description", ""),
+        "project_count": len(projs),
+        "total_capex": total_capex,
+        "total_mw": total_mw,
+        "types": types,
+        "avg_composite": avg_composite,
+        "active": port["id"] == _active_portfolio_id,
+    }
+
+
+@app.get("/api/portfolios")
+def list_portfolios():
+    return {
+        "portfolios": [_portfolio_summary(p) for p in _portfolios],
+        "active_id": _active_portfolio_id,
+        "count": len(_portfolios),
+    }
+
+
+@app.post("/api/portfolios")
+def create_portfolio(body: PortfolioIn):
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Portfolio name is required.")
+    pid = _new_portfolio_id(name)
+    port = {
+        "id": pid,
+        "name": name,
+        "description": (body.description or "").strip(),
+        "projects": [],
+    }
+    _portfolios.append(port)
+    return {
+        "status": "created",
+        "portfolio": _portfolio_summary(port),
+        "active_id": _active_portfolio_id,
+    }
+
+
+@app.post("/api/portfolios/{pid}/activate")
+def activate_portfolio(pid: str):
+    _set_active_portfolio(pid)
+    return {"status": "activated", "active_id": _active_portfolio_id}
+
+
+@app.delete("/api/portfolios/{pid}")
+def delete_portfolio(pid: str):
+    global _projects, _active_portfolio_id
+    if len(_portfolios) <= 1:
+        raise HTTPException(400, "Cannot delete the only portfolio.")
+    port = _find_portfolio(pid)
+    if not port:
+        raise HTTPException(404, "Portfolio not found")
+    _portfolios[:] = [p for p in _portfolios if p["id"] != pid]
+    if _active_portfolio_id == pid:
+        _active_portfolio_id = _portfolios[0]["id"]
+        _projects = _portfolios[0]["projects"]
+    return {"status": "deleted", "active_id": _active_portfolio_id}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PROJECTS
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/projects")
 def list_projects():
-    return {"projects": _projects, "count": len(_projects)}
+    return {
+        "projects": _projects,
+        "count": len(_projects),
+        "portfolio_id": _active_portfolio_id,
+    }
 
 
 @app.post("/api/projects")
-def add_project(project: ProjectIn):
-    new_id = f"p{len(_projects) + 1}"
-    p = attach_project_analytics({"id": new_id, **project.dict()})
-    _projects.append(p)
+def add_project(project: ProjectIn, portfolio_id: Optional[str] = None):
+    target = _resolve_target(portfolio_id)
+    p = attach_project_analytics({"id": _new_project_id(), **project.dict()})
+    target.append(p)
     return {"status": "created", "project": p}
 
 
 @app.delete("/api/projects/{project_id}")
 def delete_project(project_id: str):
-    global _projects
+    # Mutate the active list in place so the portfolio store stays in sync.
     before = len(_projects)
-    _projects = [p for p in _projects if p["id"] != project_id]
+    _projects[:] = [p for p in _projects if p["id"] != project_id]
     if len(_projects) == before:
         raise HTTPException(404, "Project not found")
     return {"status": "deleted"}
@@ -602,37 +656,50 @@ def list_financial_models():
     return {"models": models, "count": len(models)}
 
 
-@app.post("/api/projects/upload")
-async def upload_projects(file: UploadFile = File(...)):
-    """Accept CSV or simple XLSX upload of multiple projects."""
-    content = await file.read()
-    added = []
-    errors = []
+@app.get("/api/projects/import-agent-status")
+def import_agent_status():
+    """Whether AI-assisted spreadsheet import is available (requires OPENAI_API_KEY)."""
+    return {
+        "enabled": agent_import_configured(),
+        "model": OPENAI_IMPORT_MODEL if agent_import_configured() else None,
+    }
 
+
+@app.post("/api/projects/upload")
+async def upload_projects(file: UploadFile = File(...), portfolio_id: Optional[str] = None):
+    """Accept CSV with columns: name, type, state, mw, capex, offtake, status."""
+    target = _resolve_target(portfolio_id)
+    content = await file.read()
     try:
         text = content.decode("utf-8")
         reader = csv.DictReader(io.StringIO(text))
-        for i, row in enumerate(reader):
-            try:
-                p = {
-                    "id":      f"p{len(_projects) + len(added) + 1}",
-                    "name":    row["name"].strip(),
-                    "type":    row["type"].strip(),
-                    "state":   row["state"].strip().upper(),
-                    "mw":      float(row["mw"]),
-                    "capex":   float(row["capex"]),
-                    "offtake": row["offtake"].strip(),
-                    "status":  row["status"].strip(),
-                }
-                p = attach_project_analytics(p)
-                added.append(p)
-            except Exception as e:
-                errors.append({"row": i + 2, "error": str(e)})
-
-        _projects.extend(added)
-        return {"added": len(added), "errors": errors, "projects": added}
+        rows = list(reader)
     except Exception as e:
         raise HTTPException(400, f"Could not parse file: {e}")
+    return _ingest_project_dicts(rows, row_base=2, target=target)
+
+
+@app.post("/api/projects/upload-agent")
+async def upload_projects_agent(file: UploadFile = File(...), portfolio_id: Optional[str] = None):
+    """Map CSV or Excel to project rows via LLM, then validate and merge into the portfolio."""
+    target = _resolve_target(portfolio_id)
+    fn = (file.filename or "").lower()
+    if not any(fn.endswith(ext) for ext in (".csv", ".xlsx", ".xls")):
+        raise HTTPException(400, "Use a .csv, .xlsx, or .xls file.")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Empty file.")
+
+    try:
+        snippet = file_to_tabular_snippet(content, file.filename or "upload.csv")
+        raw_rows = map_snippet_to_projects(snippet)
+    except AgentImportError as e:
+        raise HTTPException(e.status_code, e.message)
+
+    out = _ingest_project_dicts(raw_rows, row_base=1, target=target)
+    out["agent"] = True
+    return out
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -668,7 +735,7 @@ def analyze_portfolio():
 
 @app.get("/api/risk/correlation")
 def get_correlation():
-    sub = _build_subcomponent_matrix()
+    sub = build_correlation_bundle()
     return {
         "labels": sub["labels"],
         "keys": sub["keys"],
@@ -677,6 +744,14 @@ def get_correlation():
         "parent_factors": sub["parents"],
         "descriptions": sub["descriptions"],
         "grouped_matrices": sub["grouped_matrices"],
+        "category_labels": sub["category_labels"],
+        "category_matrix": sub["category_matrix"],
+        "category_weights": sub["category_weights"],
+        "rollup_method": (
+            "Category scores = mean of 8 subcomponent scores per parent. "
+            "Category correlations = covariance rollup from the 64×64 subcomponent matrix "
+            "(used in Monte Carlo)."
+        ),
     }
 
 

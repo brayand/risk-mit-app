@@ -82,3 +82,6 @@ CACHE_TTL_DAYS    = 30       # refresh data if older than this
 REQUEST_TIMEOUT   = 20       # seconds per HTTP request
 MAX_RETRIES       = 3
 RETRY_BACKOFF     = 2.0      # exponential backoff base (seconds)
+
+# Optional: AI-assisted project import (see /api/projects/upload-agent)
+# OPENAI_API_KEY, OPENAI_BASE_URL (default https://api.openai.com/v1), OPENAI_IMPORT_MODEL (default gpt-4o-mini)
