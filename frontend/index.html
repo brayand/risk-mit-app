@@ -817,7 +817,7 @@ function AddConfirmation({title, projects=[], sourceKind, errors, onReset, reset
 }
 
 function AddProject({onProjectAdded}) {
-  const [form,setForm] = useState({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
+  const [form,setForm] = useState({name:"",type:"",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   const [submitting,setSubmitting] = useState(false);
   const [lastAdd,setLastAdd] = useState(null);
   const [agentStatus,setAgentStatus] = useState({ enabled: false, model: null, provider: null });
@@ -838,7 +838,7 @@ function AddProject({onProjectAdded}) {
   }, []);
   const STATES = ["AK","AL","AR","AZ","CA","CO","CT","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"];
   const submit = async () => {
-    if(!form.name||!form.mw||!form.capex) return;
+    if(!form.name||!form.type||!form.mw||!form.capex) return;
     setSubmitting(true);
     const result = await api("/api/projects",{method:"POST",body:JSON.stringify({...form,mw:parseFloat(form.mw),capex:parseFloat(form.capex)})});
     setSubmitting(false);
@@ -854,7 +854,7 @@ function AddProject({onProjectAdded}) {
         : <input type={type} value={form[field]} onChange={e=>set(field,e.target.value)} style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}/>}
     </div>
   );
-  const resetForm = () => setForm({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
+  const resetForm = () => setForm({name:"",type:"",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Data Entry</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Add Project</h1></div>
@@ -954,7 +954,21 @@ function AddProject({onProjectAdded}) {
           <Label>Manual Add</Label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 20px",marginTop:6}}>
             <Field label="Project Name"      field="name"/>
-            <Field label="Technology Type"   field="type"    options={["Geothermal","Nuclear SMR","Battery Storage"]}/>
+            <div style={{marginBottom:18}}>
+              <Label>Technology Type</Label>
+              <input
+                list="manual-tech-types"
+                value={form.type}
+                onChange={e=>set("type",e.target.value)}
+                placeholder="Pick or type your own…"
+                style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}
+              />
+              <datalist id="manual-tech-types">
+                <option value="Geothermal"/>
+                <option value="Nuclear SMR"/>
+                <option value="Battery Storage"/>
+              </datalist>
+            </div>
             <Field label="U.S. State"        field="state"   options={STATES}/>
             <Field label="Capacity (MW)"     field="mw"      type="number"/>
             <Field label="Total CapEx (USD)" field="capex"   type="number"/>
