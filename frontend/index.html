@@ -804,14 +804,34 @@ function AddProject({onProjectAdded}) {
         : <input type={type} value={form[field]} onChange={e=>set(field,e.target.value)} style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}/>}
     </div>
   );
-  if(done) return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400,gap:16}}>
+  if(done) {
+    const detailRows = [
+      ["Technology", <span style={{color:typeColor(done.type)}}>{typeIcon(done.type)} {done.type}</span>],
+      ["U.S. State", done.state],
+      ["Capacity", `${fmtN(done.mw)} MW`],
+      ["Total CapEx", fmtM(done.capex)],
+      ["Offtake", done.offtake],
+      ["Status", done.status],
+    ];
+    if (done.developer) detailRows.push(["Developer", done.developer]);
+    if (done.cod) detailRows.push(["COD", done.cod]);
+    return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400,gap:14}}>
       <div style={{fontSize:48,color:"#4caf82"}}>✓</div>
       <div style={{color:T.text,fontSize:20,fontFamily:T.serif}}>Project Added Successfully</div>
-      <div style={{color:T.textDim,fontSize:12,fontFamily:T.mono}}>{done.name} · {done.type} · {done.state}</div>
-      <button onClick={()=>{setDone(null);setForm({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});}} style={{marginTop:12,padding:"10px 28px",background:"transparent",border:"1px solid #4ecdc4",color:"#4ecdc4",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:T.mono,letterSpacing:1}}>ADD ANOTHER</button>
+      <div style={{color:T.text,fontSize:14,fontFamily:T.mono,fontWeight:600,textAlign:"center"}}>{done.name}</div>
+      <div style={{width:"100%",maxWidth:420,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 16px",background:T.bg}}>
+        {detailRows.map(([k,v],i)=>(
+          <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<detailRows.length-1?`1px solid ${T.border}`:"none"}}>
+            <span style={{fontSize:11,color:T.textDim,fontFamily:T.mono}}>{k}</span>
+            <span style={{fontSize:12,color:T.text,fontFamily:T.mono}}>{v}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={()=>{setDone(null);setForm({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});}} style={{marginTop:6,padding:"10px 28px",background:"transparent",border:"1px solid #4ecdc4",color:"#4ecdc4",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:T.mono,letterSpacing:1}}>ADD ANOTHER</button>
     </div>
-  );
+    );
+  }
   return (
     <div>
       <div style={{marginBottom:28}}><Label>Data Entry</Label><h1 style={{fontSize:36,fontWeight:700,color:T.text,fontFamily:T.serif,margin:"4px 0"}}>Add Project</h1></div>
@@ -915,9 +935,23 @@ function AddProject({onProjectAdded}) {
         )}
         {agentResult && (
           <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono,lineHeight:1.6}}>
-            Added {agentResult.added ?? 0} project(s){agentResult.source_kind ? ` from ${agentResult.source_kind}` : ""}.
+            <div style={{color:"#2f7f5f",fontWeight:600,marginBottom:6}}>
+              ✓ Added {agentResult.added ?? 0} project(s){agentResult.source_kind ? ` from ${agentResult.source_kind}` : ""}.
+            </div>
+            {(agentResult.projects && agentResult.projects.length > 0) && (
+              <div style={{border:`1px solid ${T.border}`,borderRadius:8,background:T.bg,overflow:"hidden",marginBottom:6}}>
+                {agentResult.projects.map((p,i)=>(
+                  <div key={p.id||i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"7px 12px",borderBottom:i<agentResult.projects.length-1?`1px solid ${T.border}`:"none"}}>
+                    <span style={{color:T.text}}>{p.name}</span>
+                    <span style={{color:T.textDim,whiteSpace:"nowrap"}}>
+                      <span style={{color:typeColor(p.type)}}>{typeIcon(p.type)} {p.type}</span> · {p.state} · {fmtN(p.mw)} MW · {fmtM(p.capex)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             {(agentResult.errors && agentResult.errors.length > 0) ? (
-              <span> {agentResult.errors.length} row(s) skipped — see API response for details.</span>
+              <span style={{color:"#b07a24"}}> {agentResult.errors.length} row(s) skipped — see API response for details.</span>
             ) : null}
           </div>
         )}
