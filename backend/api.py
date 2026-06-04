@@ -7,6 +7,14 @@ Run: uvicorn api:app --reload --port 8000
 import sys, os, math, json, re
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Load a local .env (backend/.env or repo root) for development. No-op in
+# production where real environment variables are provided by the host.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
