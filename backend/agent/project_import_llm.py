@@ -119,7 +119,10 @@ def _pdf_to_text(content: bytes) -> str:
 
 _FIELDS_SPEC = """Each project object MUST include:
 - name: string (project title)
-- type: exactly one of: "Geothermal", "Nuclear SMR", "Battery Storage"
+- type: the project's actual technology type as a short Title Case label. Use one of the
+  standard labels when it fits: "Geothermal", "Nuclear SMR", "Battery Storage". If the
+  project is a different technology, use a concise label for what it actually is
+  (e.g. "Carbon Capture", "Solar PV", "Onshore Wind", "Green Hydrogen", "Pumped Hydro").
 - state: two-letter U.S. state code, uppercase
 - mw: number (nameplate capacity in MW)
 - capex: number (total CapEx in USD — NOT millions; if the source uses $M or $B, convert to dollars)
@@ -132,7 +135,8 @@ Each project object MAY also include (use null when unknown):
 - notes: string (one short sentence summarizing key diligence facts)
 
 Rules:
-- Map synonyms (BESS/battery → "Battery Storage"; SMR/nuclear/reactor → "Nuclear SMR").
+- Map synonyms to the standard labels (BESS/battery → "Battery Storage"; SMR/nuclear/reactor → "Nuclear SMR").
+- Do NOT force an unrelated technology into a standard label — record what the project actually is.
 - When offtake/status are unknown, prefer "Merchant" and "Development".
 - Output ONLY a single JSON object: {"projects": [ ... ]}. No prose, no markdown fences."""
 
@@ -213,23 +217,59 @@ def verify_agent_credentials() -> dict:
 
 # ── JSON parsing + mapping ─────────────────────────────────────────────────────
 
+def _balanced_json_span(text: str) -> str | None:
+    """Return the substring from the first '{' to its matching '}', ignoring
+    braces that appear inside string literals. Tolerates trailing prose."""
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_str = False
+    escape = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if in_str:
+            if escape:
+                escape = False
+            elif c == "\\":
+                escape = True
+            elif c == '"':
+                in_str = False
+        else:
+            if c == '"':
+                in_str = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+    return None  # never balanced → likely truncated output
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     text = text.strip()
     # Strip accidental markdown fences.
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?|\n?```$", "", text.strip())
-    m = re.search(r"\{[\s\S]*\}", text)
-    if m:
-        text = m.group(0)
-    return json.loads(text)
+    candidate = _balanced_json_span(text)
+    if candidate is None:
+        # Fall back to a greedy span (handles odd cases); may still fail to parse.
+        m = re.search(r"\{[\s\S]*\}", text)
+        candidate = m.group(0) if m else text
+    # strict=False tolerates raw newlines/tabs inside string values (e.g. notes).
+    return json.loads(candidate, strict=False)
 
 
 def _projects_from_text(text: str) -> List[dict[str, Any]]:
     try:
         obj = _extract_json_object(text)
     except json.JSONDecodeError as e:
-        log.warning("Claude JSON parse error: %s", text[:300])
-        raise AgentImportError("Model did not return valid JSON.", 502) from e
+        log.warning("Claude JSON parse error: %s", text[:1000])
+        snippet = text.strip().replace("\n", " ")[:160]
+        raise AgentImportError(
+            f"Model did not return valid JSON. Response began: {snippet!r}", 502
+        ) from e
 
     projects = obj.get("projects")
     if not isinstance(projects, list):
@@ -245,5 +285,5 @@ def map_content_to_projects(text: str, kind: str) -> List[dict[str, Any]]:
         if kind == "document"
         else "Parse the following table into the JSON schema described."
     )
-    content = _call_claude(system=system, user=f"{intro}\n\n---\n{text[:120_000]}")
+    content = _call_claude(system=system, user=f"{intro}\n\n---\n{text[:120_000]}", max_tokens=8192)
     return _projects_from_text(content)
