@@ -23,3 +23,8 @@ frontend/dist/
 .idea/
 *.swp
 .DS_Store
+
+# Dev server PID files
+.backend-dev.pid
+.frontend-dev.pid
+*.pid
