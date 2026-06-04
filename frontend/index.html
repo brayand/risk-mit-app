@@ -783,6 +783,19 @@ function Dashboard() {
 }
 
 // ─── ADD PROJECT ─────────────────────────────────────────────────────────────
+function AddField({label,field,type="text",options,form,set}) {
+  return (
+    <div style={{marginBottom:18}}>
+      <Label>{label}</Label>
+      {options
+        ? <select value={form[field]} onChange={e=>set(field,e.target.value)} style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono}}>
+            {options.map(o=><option key={o}>{o}</option>)}
+          </select>
+        : <input type={type} value={form[field]} onChange={e=>set(field,e.target.value)} style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}/>}
+    </div>
+  );
+}
+
 function AddConfirmation({title, projects=[], sourceKind, errors, onReset, resetLabel}) {
   return (
     <div>
@@ -844,16 +857,6 @@ function AddProject({onProjectAdded}) {
     setSubmitting(false);
     if(result){setLastAdd({title:"Project Added Successfully",projects:[result.project]});resetForm();onProjectAdded?.();}
   };
-  const Field = ({label,field,type="text",options}) => (
-    <div style={{marginBottom:18}}>
-      <Label>{label}</Label>
-      {options
-        ? <select value={form[field]} onChange={e=>set(field,e.target.value)} style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono}}>
-            {options.map(o=><option key={o}>{o}</option>)}
-          </select>
-        : <input type={type} value={form[field]} onChange={e=>set(field,e.target.value)} style={{width:"100%",padding:"10px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,fontSize:12,fontFamily:T.mono,boxSizing:"border-box"}}/>}
-    </div>
-  );
   const resetForm = () => setForm({name:"",type:"",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   return (
     <div>
@@ -953,7 +956,7 @@ function AddProject({onProjectAdded}) {
         <Card style={{height:"100%"}}>
           <Label>Manual Add</Label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 20px",marginTop:6}}>
-            <Field label="Project Name"      field="name"/>
+            <AddField label="Project Name"      field="name"   form={form} set={set}/>
             <div style={{marginBottom:18}}>
               <Label>Technology Type</Label>
               <input
@@ -969,11 +972,11 @@ function AddProject({onProjectAdded}) {
                 <option value="Battery Storage"/>
               </datalist>
             </div>
-            <Field label="U.S. State"        field="state"   options={STATES}/>
-            <Field label="Capacity (MW)"     field="mw"      type="number"/>
-            <Field label="Total CapEx (USD)" field="capex"   type="number"/>
-            <Field label="Offtake Structure" field="offtake" options={["PPA-Utility","PPA-Commercial","Merchant","Self-Supply"]}/>
-            <Field label="Project Status"    field="status"  options={["Development","Construction","Operating","Decommissioning"]}/>
+            <AddField label="U.S. State"        field="state"   options={STATES} form={form} set={set}/>
+            <AddField label="Capacity (MW)"     field="mw"      type="number" form={form} set={set}/>
+            <AddField label="Total CapEx (USD)" field="capex"   type="number" form={form} set={set}/>
+            <AddField label="Offtake Structure" field="offtake" options={["PPA-Utility","PPA-Commercial","Merchant","Self-Supply"]} form={form} set={set}/>
+            <AddField label="Project Status"    field="status"  options={["Development","Construction","Operating","Decommissioning"]} form={form} set={set}/>
             <div style={{gridColumn:"1/-1",marginTop:4}}>
               <button onClick={submit} disabled={submitting} style={{padding:"11px 32px",background:submitting?T.border:"#4ecdc4",border:"none",borderRadius:6,color:T.bg,fontWeight:700,fontSize:12,cursor:submitting?"default":"pointer",fontFamily:T.mono,letterSpacing:1}}>
                 {submitting?"ADDING...":"ADD TO PORTFOLIO →"}
