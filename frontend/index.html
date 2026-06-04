@@ -819,11 +819,10 @@ function AddConfirmation({title, projects=[], sourceKind, errors, onReset, reset
 function AddProject({onProjectAdded}) {
   const [form,setForm] = useState({name:"",type:"Geothermal",state:"NV",mw:"",capex:"",offtake:"PPA-Utility",status:"Development"});
   const [submitting,setSubmitting] = useState(false);
-  const [done,setDone] = useState(null);
+  const [lastAdd,setLastAdd] = useState(null);
   const [agentStatus,setAgentStatus] = useState({ enabled: false, model: null, provider: null });
   const [spreadsheetFile,setSpreadsheetFile] = useState(null);
   const [agentBusy,setAgentBusy] = useState(false);
-  const [agentResult,setAgentResult] = useState(null);
   const [agentError,setAgentError] = useState(null);
   const [agentCheck,setAgentCheck] = useState(null);
   const [checking,setChecking] = useState(false);
@@ -843,7 +842,7 @@ function AddProject({onProjectAdded}) {
     setSubmitting(true);
     const result = await api("/api/projects",{method:"POST",body:JSON.stringify({...form,mw:parseFloat(form.mw),capex:parseFloat(form.capex)})});
     setSubmitting(false);
-    if(result){setDone(result.project);onProjectAdded?.();}
+    if(result){setLastAdd({title:"Project Added Successfully",projects:[result.project]});resetForm();onProjectAdded?.();}
   };
   const Field = ({label,field,type="text",options}) => (
     <div style={{marginBottom:18}}>
@@ -862,10 +861,10 @@ function AddProject({onProjectAdded}) {
       <PageDescription>
         Use this page to register a project in the underwriting portfolio. Each field feeds downstream scoring and capital calculations, so entries here become part of the risk engine, review queue, and export outputs after the next analysis refresh.
       </PageDescription>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"stretch"}}>
 
         {/* ── AI-assisted import (left / first) ──────────────────────────────── */}
-        <Card>
+        <Card style={{height:"100%"}}>
           <Label>AI-assisted import (Claude)</Label>
           <div style={{fontSize:11,color:T.textDim,fontFamily:T.mono,marginBottom:12,lineHeight:1.6}}>
             Upload a <strong style={{color:T.textMid}}>CSV/Excel register</strong> or a <strong style={{color:T.textMid}}>PDF/text document</strong> (term sheet, permit, EPC contract). The server sends the extracted text to <strong style={{color:T.textMid}}>Claude</strong>, which maps it to project fields (incl. optional developer, COD, and notes); rows are then validated and added to the active portfolio. You can import as many files as you like — the button is ready again after each import. Set <code style={{fontSize:10}}>ANTHROPIC_API_KEY</code> on the API host to enable.
@@ -914,7 +913,7 @@ function AddProject({onProjectAdded}) {
                 const r = await uploadProjectsAgentSpreadsheet(spreadsheetFile);
                 setAgentBusy(false);
                 if (r.ok) {
-                  setAgentResult(r.data);
+                  setLastAdd({title:"Imported with AI",projects:r.data.projects||[],sourceKind:r.data.source_kind,errors:r.data.errors});
                   setSpreadsheetFile(null);
                   if (fileRef.current) fileRef.current.value = "";
                   onProjectAdded?.();
@@ -945,50 +944,45 @@ function AddProject({onProjectAdded}) {
           {agentError && (
             <div style={{fontSize:11,color:"#c44545",fontFamily:T.mono,marginBottom:8,whiteSpace:"pre-wrap"}}>{agentError}</div>
           )}
-          {!spreadsheetFile && !agentResult && (
+          {!spreadsheetFile && (
             <div style={{fontSize:11,color:T.textMid,fontFamily:T.mono}}>Choose one .csv, .xlsx, .pdf, or .txt file.</div>
-          )}
-          {agentResult && (
-            <div style={{marginTop:12}}>
-              <AddConfirmation
-                title="Imported with AI"
-                projects={agentResult.projects||[]}
-                sourceKind={agentResult.source_kind}
-                errors={agentResult.errors}
-                onReset={()=>setAgentResult(null)}
-                resetLabel="CLEAR"
-              />
-            </div>
           )}
         </Card>
 
         {/* ── Manual Add (right) ────────────────────────────────────────────── */}
-        <Card>
+        <Card style={{height:"100%"}}>
           <Label>Manual Add</Label>
-          {done ? (
-            <AddConfirmation
-              title="Project Added Successfully"
-              projects={[done]}
-              onReset={()=>{setDone(null);resetForm();}}
-              resetLabel="ADD ANOTHER"
-            />
-          ) : (
-            <div style={{marginTop:6}}>
-              <Field label="Project Name"      field="name"/>
-              <Field label="Technology Type"   field="type"    options={["Geothermal","Nuclear SMR","Battery Storage"]}/>
-              <Field label="U.S. State"        field="state"   options={STATES}/>
-              <Field label="Capacity (MW)"     field="mw"      type="number"/>
-              <Field label="Total CapEx (USD)" field="capex"   type="number"/>
-              <Field label="Offtake Structure" field="offtake" options={["PPA-Utility","PPA-Commercial","Merchant","Self-Supply"]}/>
-              <Field label="Project Status"    field="status"  options={["Development","Construction","Operating","Decommissioning"]}/>
-              <button onClick={submit} disabled={submitting} style={{marginTop:8,padding:"11px 32px",background:submitting?T.border:"#4ecdc4",border:"none",borderRadius:6,color:T.bg,fontWeight:700,fontSize:12,cursor:submitting?"default":"pointer",fontFamily:T.mono,letterSpacing:1}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 20px",marginTop:6}}>
+            <Field label="Project Name"      field="name"/>
+            <Field label="Technology Type"   field="type"    options={["Geothermal","Nuclear SMR","Battery Storage"]}/>
+            <Field label="U.S. State"        field="state"   options={STATES}/>
+            <Field label="Capacity (MW)"     field="mw"      type="number"/>
+            <Field label="Total CapEx (USD)" field="capex"   type="number"/>
+            <Field label="Offtake Structure" field="offtake" options={["PPA-Utility","PPA-Commercial","Merchant","Self-Supply"]}/>
+            <Field label="Project Status"    field="status"  options={["Development","Construction","Operating","Decommissioning"]}/>
+            <div style={{gridColumn:"1/-1",marginTop:4}}>
+              <button onClick={submit} disabled={submitting} style={{padding:"11px 32px",background:submitting?T.border:"#4ecdc4",border:"none",borderRadius:6,color:T.bg,fontWeight:700,fontSize:12,cursor:submitting?"default":"pointer",fontFamily:T.mono,letterSpacing:1}}>
                 {submitting?"ADDING...":"ADD TO PORTFOLIO →"}
               </button>
             </div>
-          )}
+          </div>
         </Card>
 
       </div>
+
+      {/* ── Shared confirmation (outside both columns) ────────────────────────── */}
+      {lastAdd && (
+        <Card style={{marginTop:16}}>
+          <AddConfirmation
+            title={lastAdd.title}
+            projects={lastAdd.projects}
+            sourceKind={lastAdd.sourceKind}
+            errors={lastAdd.errors}
+            onReset={()=>setLastAdd(null)}
+            resetLabel="DISMISS"
+          />
+        </Card>
+      )}
     </div>
   );
 }
