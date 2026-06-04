@@ -264,7 +264,30 @@ function KPI({label,value,sub,color,loading,sourceKey}) {
 }
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────────────────
-function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync,portfolios,activePortfolioId,portfolioBusy,onSelectPortfolio}) {
+function TopBar({portfolios,activePortfolioId,portfolioBusy,onSelectPortfolio,onManage}) {
+  return (
+    <header style={{position:"fixed",top:0,left:218,right:0,height:52,background:"#ffffff",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"0 32px",zIndex:90,fontFamily:T.mono}}>
+      {portfolios && portfolios.length > 0 && (
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:9,color:T.textDim,letterSpacing:1.5}}>ACTIVE PORTFOLIO</span>
+          <select
+            value={activePortfolioId||""}
+            disabled={portfolioBusy}
+            onChange={(e)=>{ const id=e.target.value; if(id && id!==activePortfolioId) onSelectPortfolio?.(id); }}
+            style={{minWidth:220,padding:"7px 10px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:5,color:"#1f3f73",fontSize:12,fontWeight:600,fontFamily:T.mono,cursor:portfolioBusy?"default":"pointer"}}
+          >
+            {portfolios.map((p)=>(
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button onClick={onManage} title="Manage portfolios" style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:5,padding:"7px 12px",cursor:"pointer",fontSize:10,color:"#345d9d",letterSpacing:1,fontFamily:T.mono}}>MANAGE</button>
+        </div>
+      )}
+    </header>
+  );
+}
+
+function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync}) {
   const navGroups = [
     {
       category: "Inputs",
@@ -315,24 +338,6 @@ function Sidebar({active,setActive,reviewPending,pipelineRunning,onSync,portfoli
           <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:T.serif}}>Risk Mitigation<br/>Platform</div>
         </button>
         <div style={{marginTop:8,fontSize:9,color:T.textDim,letterSpacing:2}}>NAIC RBC · U.S. ONLY</div>
-        {portfolios && portfolios.length > 0 && (
-          <div style={{marginTop:10,background:"#eef3fb",border:`1px solid ${T.border}`,borderRadius:6,padding:"7px 9px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-              <span style={{fontSize:8,color:T.textDim,letterSpacing:1.5}}>ACTIVE PORTFOLIO</span>
-              <button onClick={()=>setActive("home")} title="Manage portfolios" style={{background:"transparent",border:"none",padding:0,cursor:"pointer",fontSize:8,color:"#345d9d",letterSpacing:1}}>MANAGE →</button>
-            </div>
-            <select
-              value={activePortfolioId||""}
-              disabled={portfolioBusy}
-              onChange={(e)=>{ const id=e.target.value; if(id && id!==activePortfolioId) onSelectPortfolio?.(id); }}
-              style={{width:"100%",padding:"6px 8px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:5,color:"#1f3f73",fontSize:11,fontWeight:600,fontFamily:T.mono,cursor:portfolioBusy?"default":"pointer"}}
-            >
-              {portfolios.map((p)=>(
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
       <nav style={{flex:1,padding:"14px 10px"}}>
         {navGroups.map((group)=>(
@@ -2312,8 +2317,9 @@ function App() {
           100%{transform:scale(1); box-shadow:0 0 0 0 rgba(52,93,157,0);}
         }
       `}</style>
-      <Sidebar active={active} setActive={setActive} reviewPending={reviewPending} pipelineRunning={pipelineRunning} onSync={handleSync} portfolios={portfolios} activePortfolioId={activePortfolioId} portfolioBusy={portfolioBusy} onSelectPortfolio={onActivatePortfolio}/>
-      <main style={{marginLeft:218,padding:"40px 48px",maxWidth:1260}}>
+      <Sidebar active={active} setActive={setActive} reviewPending={reviewPending} pipelineRunning={pipelineRunning} onSync={handleSync}/>
+      <TopBar portfolios={portfolios} activePortfolioId={activePortfolioId} portfolioBusy={portfolioBusy} onSelectPortfolio={onActivatePortfolio} onManage={()=>setActive("home")}/>
+      <main style={{marginLeft:218,padding:"76px 48px 40px",maxWidth:1260}}>
         {screens[active]||<Dashboard/>}
       </main>
     </div>
